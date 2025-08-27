@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام تسجيل الطلاب</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        body {
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            margin-bottom: 10px;
+        }
+        
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #f1f1f1;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            margin-left: 5px;
+            border-radius: 5px 5px 0 0;
+        }
+        
+        .tab.active {
+            background-color: #2c3e50;
+            color: white;
+        }
+        
+        .tab-content {
+            display: none;
+            padding: 20px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 0 0 5px 5px;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        button {
+            background-color: #2c3e50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        
+        button:hover {
+            background-color: #1a252f;
+        }
+        
+        .message {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: right;
+        }
+        
+        th {
+            background-color: #2c3e50;
+            color: white;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        
+        .action-btn {
+            padding: 5px 10px;
+            margin-left: 5px;
+            font-size: 14px;
+        }
+        
+        .approve {
+            background-color: #28a745;
+        }
+        
+        .reject {
+            background-color: #dc3545;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            .tabs {
+                flex-direction: column;
+            }
+            
+            .tab {
+                margin-left: 0;
+                margin-bottom: 5px;
+                border-radius: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>نظام تسجيل الطلاب</h1>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="tabs">
+            <div class="tab active" onclick="openTab('register')">تسجيل طالب جديد</div>
+            <div class="tab" onclick="openTab('admin')">لوحة التحكم (للمشرفين)</div>
+        </div>
+        
+        <div id="register" class="tab-content active">
+            <h2>تسجيل طالب جديد</h2>
+            <div id="register-message" class="message" style="display: none;"></div>
+            
+            <form id="registration-form">
+                <div class="form-group">
+                    <label for="name">اسم الطالب الكامل</label>
+                    <input type="text" id="name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="birthDate">تاريخ الميلاد</label>
+                    <input type="date" id="birthDate" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="parentName">اسم ولي الأمر</label>
+                    <input type="text" id="parentName" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="parentPhone">هاتف ولي الأمر</label>
+                    <input type="tel" id="parentPhone" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="parentEmail">بريد ولي الأمر</label>
+                    <input type="email" id="parentEmail" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="academicYear">السنة الدراسية</label>
+                    <select id="academicYear" required>
+                        <option value="">اختر السنة</option>
+                        <option value="1AS">الأولى ثانوي</option>
+                        <option value="2AS">الثانية ثانوي</option>
+                        <option value="3AS">الثالثة ثانوي</option>
+                        <option value="1MS">الأولى متوسط</option>
+                        <option value="2MS">الثانية متوسط</option>
+                        <option value="3MS">الثالثة متوسط</option>
+                        <option value="4MS">الرابعة متوسط</option>
+                        <option value="5MS">الخامسة متوسط</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="address">العنوان</label>
+                    <input type="text" id="address" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="previousSchool">المدرسة السابقة (اختياري)</label>
+                    <input type="text" id="previousSchool">
+                </div>
+                
+                <div class="form-group">
+                    <label for="healthInfo">معلومات صحية مهمة (اختياري)</label>
+                    <textarea id="healthInfo" rows="3"></textarea>
+                </div>
+                
+                <button type="submit" id="register-btn">إرسال طلب التسجيل</button>
+            </form>
+        </div>
+        
+        <div id="admin" class="tab-content">
+            <h2>لوحة التحكم للمشرفين</h2>
+            <div id="admin-message" class="message" style="display: none;"></div>
+            
+            <div class="form-group">
+                <label for="admin-username">اسم المستخدم</label>
+                <input type="text" id="admin-username" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="admin-password">كلمة المرور</label>
+                <input type="password" id="admin-password" required>
+            </div>
+            
+            <button onclick="adminLogin()" id="admin-login-btn">تسجيل الدخول</button>
+            
+            <div id="admin-panel" style="display: none;">
+                <h3>طلبات التسجيل المعلقة</h3>
+                <table id="pending-students">
+                    <thead>
+                        <tr>
+                            <th>اسم الطالب</th>
+                            <th>ولي الأمر</th>
+                            <th>الهاتف</th>
+                            <th>البريد</th>
+                            <th>تاريخ التسجيل</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Simulated database
+        let students = JSON.parse(localStorage.getItem('students')) || [];
+        let adminUsername = 'admin';
+        let adminPassword = 'admin123';
+        let loggedIn = false;
+        
+        // Tab functionality
+        function openTab(tabName) {
+            const tabs = document.getElementsByClassName('tab-content');
+            for (let i = 0; i < tabs.length; i++) {
+                tabs[i].classList.remove('active');
+            }
+            
+            const tabButtons = document.getElementsByClassName('tab');
+            for (let i = 0; i < tabButtons.length; i++) {
+                tabButtons[i].classList.remove('active');
+            }
+            
+            document.getElementById(tabName).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+        
+        // Registration form submission
+        document.getElementById('registration-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const registerBtn = document.getElementById('register-btn');
+            registerBtn.disabled = true;
+            registerBtn.innerHTML = '<span class="loading"></span> جاري الإرسال...';
+            
+            // Simulate API call with timeout
+            setTimeout(() => {
+                const student = {
+                    id: Date.now().toString(),
+                    name: document.getElementById('name').value,
+                    birthDate: document.getElementById('birthDate').value,
+                    parentName: document.getElementById('parentName').value,
+                    parentPhone: document.getElementById('parentPhone').value,
+                    parentEmail: document.getElementById('parentEmail').value,
+                    academicYear: document.getElementById('academicYear').value,
+                    address: document.getElementById('address').value,
+                    previousSchool: document.getElementById('previousSchool').value,
+                    healthInfo: document.getElementById('healthInfo').value,
+                    registrationDate: new Date().toISOString(),
+                    status: 'pending'
+                };
+                
+                students.push(student);
+                localStorage.setItem('students', JSON.stringify(students));
+                
+                showMessage('register-message', `تم استلام طلب تسجيل الطالب ${student.name}. سوف يتم مراجعة الطلب وإعلامكم بالنتيجة.`, 'success');
+                
+                // Reset form
+                document.getElementById('registration-form').reset();
+                
+                registerBtn.disabled = false;
+                registerBtn.textContent = 'إرسال طلب التسجيل';
+                
+                // If admin is logged in, refresh the pending students list
+                if (loggedIn) {
+                    loadPendingStudents();
+                }
+            }, 1000);
+        });
+        
+        // Admin login
+        function adminLogin() {
+            const username = document.getElementById('admin-username').value;
+            const password = document.getElementById('admin-password').value;
+            const loginBtn = document.getElementById('admin-login-btn');
+            
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<span class="loading"></span> جاري التحقق...';
+            
+            // Simulate API call with timeout
+            setTimeout(() => {
+                if (username === adminUsername && password === adminPassword) {
+                    loggedIn = true;
+                    document.getElementById('admin-panel').style.display = 'block';
+                    showMessage('admin-message', 'تم تسجيل الدخول بنجاح', 'success');
+                    loadPendingStudents();
+                } else {
+                    showMessage('admin-message', 'اسم المستخدم أو كلمة المرور غير صحيحة', 'error');
+                }
+                
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'تسجيل الدخول';
+            }, 1000);
+        }
+        
+        // Load pending students
+        function loadPendingStudents() {
+            const pendingStudents = students.filter(student => student.status === 'pending');
+            const tbody = document.querySelector('#pending-students tbody');
+            tbody.innerHTML = '';
+            
+            if (pendingStudents.length === 0) {
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = 6;
+                td.textContent = 'لا توجد طلبات معلقة حالياً';
+                td.style.textAlign = 'center';
+                tr.appendChild(td);
+                tbody.appendChild(tr);
+                return;
+            }
+            
+            pendingStudents.forEach(student => {
+                const tr = document.createElement('tr');
+                
+                const nameTd = document.createElement('td');
+                nameTd.textContent = student.name;
+                tr.appendChild(nameTd);
+                
+                const parentTd = document.createElement('td');
+                parentTd.textContent = student.parentName;
+                tr.appendChild(parentTd);
+                
+                const phoneTd = document.createElement('td');
+                phoneTd.textContent = student.parentPhone;
+                tr.appendChild(phoneTd);
+                
+                const emailTd = document.createElement('td');
+                emailTd.textContent = student.parentEmail;
+                tr.appendChild(emailTd);
+                
+                const dateTd = document.createElement('td');
+                dateTd.textContent = new Date(student.registrationDate).toLocaleDateString('ar-EG');
+                tr.appendChild(dateTd);
+                
+                const actionsTd = document.createElement('td');
+                
+                const approveBtn = document.createElement('button');
+                approveBtn.textContent = 'قبول';
+                approveBtn.className = 'action-btn approve';
+                approveBtn.onclick = () => approveStudent(student.id);
+                actionsTd.appendChild(approveBtn);
+                
+                const rejectBtn = document.createElement('button');
+                rejectBtn.textContent = 'رفض';
+                rejectBtn.className = 'action-btn reject';
+                rejectBtn.onclick = () => rejectStudent(student.id);
+                actionsTd.appendChild(rejectBtn);
+                
+                tr.appendChild(actionsTd);
+                tbody.appendChild(tr);
+            });
+        }
+        
+        // Approve student
+        function approveStudent(studentId) {
+            const student = students.find(s => s.id === studentId);
+            if (!student) return;
+            
+            // Generate student ID
+            const year = new Date().getFullYear().toString().slice(-2);
+            const randomNum = Math.floor(1000 + Math.random() * 9000);
+            const generatedId = `STU-${year}-${randomNum}`;
+            
+            student.status = 'active';
+            student.studentId = generatedId;
+            localStorage.setItem('students', JSON.stringify(students));
+            
+            showMessage('admin-message', `تم قبول طلب تسجيل الطالب ${student.name}. الرقم الجامعي: ${generatedId}`, 'success');
+            loadPendingStudents();
+            
+            // In a real app, you would send an SMS/email here
+            console.log(`Sending approval notification to ${student.parentPhone}`);
+        }
+        
+        // Reject student
+        function rejectStudent(studentId) {
+            const reason = prompt('الرجاء إدخال سبب الرفض:');
+            if (!reason) return;
+            
+            const student = students.find(s => s.id === studentId);
+            if (!student) return;
+            
+            student.status = 'rejected';
+            student.rejectionReason = reason;
+            localStorage.setItem('students', JSON.stringify(students));
+            
+            showMessage('admin-message', `تم رفض طلب تسجيل الطالب ${student.name}`, 'success');
+            loadPendingStudents();
+            
+            // In a real app, you would send an SMS/email here
+            console.log(`Sending rejection notification to ${student.parentPhone} with reason: ${reason}`);
+        }
+        
+        // Show message
+        function showMessage(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `message ${type}`;
+            element.style.display = 'block';
+            
+            setTimeout(() => {
+                element.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if there are any pending students in local storage
+            if (students.some(s => s.status === 'pending')) {
+                document.querySelector('.tab:nth-child(2)').textContent += ` (${students.filter(s => s.status === 'pending').length})`;
+            }
+        });
+    </script>
+</body>
+</html>

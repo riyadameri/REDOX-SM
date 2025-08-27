@@ -1,0 +1,51 @@
+/* تنسيقات عامة للواجهة العربية */
+body {
+    font-family: 'Tajawal', sans-serif;
+    background-color: #f8f9fa;
+}
+
+.table th {
+    text-align: right;
+}
+
+/* تنسيقات البطاقات */
+.card {
+    margin-bottom: 20px;
+    border: none;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+/* تنسيقات الأزرار */
+.btn {
+    margin-left: 5px;
+}
+
+/* تنسيقات الجداول */
+.table-responsive {
+    margin-top: 20px;
+}
+
+/* تنسيقات النصوص العربية */
+.text-ar {
+    direction: rtl;
+    text-align: right;
+}
+
+/* تنسيقات البادجات */
+.badge {
+    font-weight: normal;
+    padding: 5px 10px;
+}
+
+/* تنسيقات خاصة بالرواتب */
+.salary-paid {
+    background-color: #e8f5e9;
+}
+
+.salary-pending {
+    background-color: #fff8e1;
+}
+
+.salary-late {
+    background-color: #ffebee;
+}

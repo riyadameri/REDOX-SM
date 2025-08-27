@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إنشاء حساب - نظام إدارة المدرسة</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            font-family: 'Tahoma', Arial, sans-serif;
+            background-color: #f8f9fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .register-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            width: 100%;
+            max-width: 500px;
+        }
+        .register-logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .register-logo img {
+            width: 100px;
+            height: 100px;
+            object-fit: contain;
+        }
+        .form-control {
+            padding: 10px 15px;
+        }
+        .btn-register {
+            background-color: #2ecc71;
+            border: none;
+            padding: 10px;
+            font-weight: bold;
+        }
+        .btn-register:hover {
+            background-color: #27ae60;
+        }
+        .register-footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <div class="register-logo">
+            <img src="https://via.placeholder.com/100" alt="School Logo">
+            <h3 class="mt-3">إنشاء حساب جديد</h3>
+        </div>
+        
+        <form id="registerForm">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="fullName" class="form-label">الاسم الكامل</label>
+                    <input type="text" class="form-control" id="fullName" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="username" class="form-label">اسم المستخدم</label>
+                    <input type="text" class="form-control" id="username" required>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="password" class="form-label">كلمة المرور</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="confirmPassword" class="form-label">تأكيد كلمة المرور</label>
+                    <input type="password" class="form-control" id="confirmPassword" required>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="role" class="form-label">الدور</label>
+                <select class="form-select" id="role" required>
+                    <option value="" selected disabled>اختر دور المستخدم</option>
+                    <option value="admin">مدير النظام</option>
+                    <option value="secretary">سكرتير</option>
+                    <option value="accountant">محاسب</option>
+                    <option value="teacher">أستاذ</option>
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label for="phone" class="form-label">الهاتف</label>
+                <input type="tel" class="form-control" id="phone">
+            </div>
+            
+            <div class="mb-3">
+                <label for="email" class="form-label">البريد الإلكتروني</label>
+                <input type="email" class="form-control" id="email">
+            </div>
+            
+            <button type="submit" class="btn btn-success w-100 btn-register">
+                <i class="bi bi-person-plus me-2"></i>إنشاء حساب
+            </button>
+        </form>
+        
+        <div class="register-footer">
+            <p>لديك حساب بالفعل؟ <a href="login.html">تسجيل الدخول</a></p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (password !== confirmPassword) {
+                alert('كلمة المرور وتأكيدها غير متطابقين');
+                return;
+            }
+            
+            const userData = {
+                username: document.getElementById('username').value,
+                password: password,
+                role: document.getElementById('role').value,
+                fullName: document.getElementById('fullName').value,
+                phone: document.getElementById('phone').value,
+                email: document.getElementById('email').value
+            };
+            
+            try {
+                const response = await fetch('/api/users', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(userData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('تم إنشاء الحساب بنجاح');
+                    window.location.href = 'login.html';
+                } else {
+                    alert(data.error || 'حدث خطأ أثناء إنشاء الحساب');
+                }
+            } catch (err) {
+                console.error('Registration error:', err);
+                alert('حدث خطأ أثناء محاولة إنشاء الحساب');
+            }
+        });
+    </script>
+</body>
+</html>

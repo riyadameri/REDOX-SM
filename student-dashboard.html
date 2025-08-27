@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم الطالب</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2980b9;
+            --light-color: #ecf0f1;
+            --dark-color: #2c3e50;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Tajawal', sans-serif;
+        }
+        
+        body {
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header-info h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        
+        .logout-btn {
+            background-color: var(--danger-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .logout-btn:hover {
+            background-color: #c0392b;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        
+        .card h2 {
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            font-size: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        .student-info p {
+            margin-bottom: 10px;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            color: var(--dark-color);
+        }
+        
+        .upcoming-classes {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .class-item {
+            border-bottom: 1px solid #eee;
+            padding: 15px 0;
+        }
+        
+        .class-item:last-child {
+            border-bottom: none;
+        }
+        
+        .class-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .class-details {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        
+        .class-time {
+            color: var(--secondary-color);
+            font-weight: 500;
+        }
+        
+        .class-teacher {
+            color: var(--dark-color);
+        }
+        
+        .payments-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .payments-table th, .payments-table td {
+            padding: 12px;
+            text-align: right;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .payments-table th {
+            background-color: var(--light-color);
+            font-weight: 500;
+        }
+        
+        .status-paid {
+            color: var(--success-color);
+        }
+        
+        .status-pending {
+            color: var(--warning-color);
+        }
+        
+        .status-late {
+            color: var(--danger-color);
+        }
+        
+        .change-password-form {
+            margin-top: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .form-submit {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .form-submit:hover {
+            background-color: var(--secondary-color);
+        }
+        
+        .message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        .success-message {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            header {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .logout-btn {
+                margin-top: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-info">
+                <h1 id="studentName">لوحة تحكم الطالب</h1>
+                <p id="studentId"></p>
+            </div>
+            <button class="logout-btn" id="logoutBtn">تسجيل الخروج</button>
+        </header>
+        
+        <div class="dashboard-grid">
+            <div class="card student-info">
+                <h2>المعلومات الشخصية</h2>
+                <p><span class="info-label">الاسم:</span> <span id="infoName"></span></p>
+                <p><span class="info-label">الصف الدراسي:</span> <span id="infoYear"></span></p>
+                <p><span class="info-label">اسم ولي الأمر:</span> <span id="infoParent"></span></p>
+                <p><span class="info-label">هاتف ولي الأمر:</span> <span id="infoPhone"></span></p>
+                <p><span class="info-label">البريد الإلكتروني:</span> <span id="infoEmail"></span></p>
+                
+                <div class="change-password-form">
+                    <h2>تغيير كلمة المرور</h2>
+                    <form id="passwordForm">
+                        <div class="form-group">
+                            <label for="currentPassword">كلمة المرور الحالية</label>
+                            <input type="password" id="currentPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="newPassword">كلمة المرور الجديدة</label>
+                            <input type="password" id="newPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="confirmPassword">تأكيد كلمة المرور الجديدة</label>
+                            <input type="password" id="confirmPassword" required>
+                        </div>
+                        <button type="submit" class="form-submit">تغيير كلمة المرور</button>
+                    </form>
+                    <div class="message" id="passwordMessage"></div>
+                </div>
+            </div>
+            
+            <div class="card upcoming-classes">
+                <h2>الحصص القادمة</h2>
+                <div id="classesList"></div>
+            </div>
+            
+            <div class="card">
+                <h2>حالة الدفعات</h2>
+                <table class="payments-table">
+                    <thead>
+                        <tr>
+                            <th>الشهر</th>
+                            <th>الحصة</th>
+                            <th>المبلغ</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody id="paymentsTable">
+                        <!-- Payments will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Check authentication
+        const token = localStorage.getItem('studentToken');
+        
+        if (!token) {
+            window.location.href = '/student-login.html';
+        }
+        
+        // Load student data
+        async function loadStudentData() {
+            try {
+                const response = await fetch('/api/student/data', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Update student info
+                    document.getElementById('studentName').textContent = `مرحباً ${data.student.name}`;
+                    document.getElementById('studentId').textContent = `رقم الطالب: ${data.student.studentId}`;
+                    
+                    document.getElementById('infoName').textContent = data.student.name;
+                    document.getElementById('infoYear').textContent = getAcademicYearName(data.student.academicYear);
+                    document.getElementById('infoParent').textContent = data.student.parentName;
+                    document.getElementById('infoPhone').textContent = data.student.parentPhone;
+                    document.getElementById('infoEmail').textContent = data.student.parentEmail || 'غير متوفر';
+                    
+                    // Update upcoming classes
+                    const classesList = document.getElementById('classesList');
+                    if (data.upcomingClasses.length > 0) {
+                        data.upcomingClasses.forEach(cls => {
+                            const classItem = document.createElement('div');
+                            classItem.className = 'class-item';
+                            classItem.innerHTML = `
+                                <div class="class-name">${cls.className} (${cls.subject})</div>
+                                <div class="class-details">
+                                    <span class="class-teacher">الأستاذ: ${cls.teacher}</span>
+                                    <span class="class-time">${cls.day} - ${cls.time}</span>
+                                </div>
+                                <div class="class-details">
+                                    <span>القاعة: ${cls.classroom}</span>
+                                    <span>التاريخ: ${cls.formattedDate}</span>
+                                </div>
+                            `;
+                            classesList.appendChild(classItem);
+                        });
+                    } else {
+                        classesList.innerHTML = '<p>لا توجد حصص قادمة</p>';
+                    }
+                    
+                    // Update payments
+                    const paymentsTable = document.getElementById('paymentsTable');
+                    if (data.payments.length > 0) {
+                        data.payments.forEach(payment => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${payment.month}</td>
+                                <td>${payment.class.name}</td>
+                                <td>${payment.amount} د.ك</td>
+                                <td class="status-${payment.status}">${getStatusText(payment.status)}</td>
+                            `;
+                            paymentsTable.appendChild(row);
+                        });
+                    } else {
+                        paymentsTable.innerHTML = '<tr><td colspan="4" style="text-align: center;">لا توجد دفعات مسجلة</td></tr>';
+                    }
+                } else {
+                    localStorage.removeItem('studentToken');
+                    window.location.href = '/student-login.html';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+        
+        function getAcademicYearName(code) {
+            const years = {
+                '1AS': 'الأولى ثانوي',
+                '2AS': 'الثانية ثانوي',
+                '3AS': 'الثالثة ثانوي',
+                '1MS': 'الأولى متوسط',
+                '2MS': 'الثانية متوسط',
+                '3MS': 'الثالثة متوسط',
+                '4MS': 'الرابعة متوسط',
+                '5MS': 'الخامسة متوسط'
+            };
+            return years[code] || code;
+        }
+        
+        function getStatusText(status) {
+            const statuses = {
+                'paid': 'مسددة',
+                'pending': 'قيد الانتظار',
+                'late': 'متأخرة'
+            };
+            return statuses[status] || status;
+        }
+        
+        // Change password
+        document.getElementById('passwordForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            const messageEl = document.getElementById('passwordMessage');
+            
+            if (newPassword !== confirmPassword) {
+                messageEl.textContent = 'كلمة المرور الجديدة غير متطابقة';
+                messageEl.className = 'message error-message';
+                messageEl.style.display = 'block';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/student/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ currentPassword, newPassword })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    messageEl.textContent = data.message;
+                    messageEl.className = 'message success-message';
+                    messageEl.style.display = 'block';
+                    
+                    // Clear form
+                    document.getElementById('passwordForm').reset();
+                } else {
+                    messageEl.textContent = data.error;
+                    messageEl.className = 'message error-message';
+                    messageEl.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                messageEl.textContent = 'حدث خطأ أثناء تغيير كلمة المرور';
+                messageEl.className = 'message error-message';
+                messageEl.style.display = 'block';
+            }
+        });
+        
+        // Logout
+        document.getElementById('logoutBtn').addEventListener('click', function() {
+            localStorage.removeItem('studentToken');
+            window.location.href = '/student-login.html';
+        });
+        
+        // Load data when page loads
+        document.addEventListener('DOMContentLoaded', loadStudentData);
+    </script>
+</body>
+</html>

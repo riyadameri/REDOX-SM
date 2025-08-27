@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام تسجيل الطلاب</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Tahoma', Arial, sans-serif;
+        }
+        .registration-container {
+            max-width: 800px;
+            margin: 50px auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+        }
+        .form-header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #0d6efd;
+            padding-bottom: 15px;
+        }
+        .form-header img {
+            height: 80px;
+            margin-bottom: 15px;
+        }
+        .form-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+        }
+        .section-title {
+            color: #0d6efd;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .required-field::after {
+            content: " *";
+            color: red;
+        }
+        .status-badge {
+            font-size: 1rem;
+            padding: 8px 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="registration-container">
+            <div class="form-header">
+                <img src="https://via.placeholder.com/150x80?text=School+Logo" alt="School Logo">
+                <h2 class="text-primary">نظام تسجيل الطلاب</h2>
+                <p class="text-muted">يرجى تعبئة النموذج أدناه لتسجيل الطالب</p>
+            </div>
+
+            <div id="registrationForm" class="mb-4">
+                <div class="form-section">
+                    <h4 class="section-title"><i class="bi bi-person-vcard"></i> المعلومات الأساسية</h4>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="studentName" class="form-label required-field">اسم الطالب</label>
+                            <input type="text" class="form-control" id="studentName" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="birthDate" class="form-label">تاريخ الميلاد</label>
+                            <input type="date" class="form-control" id="birthDate">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="academicYear" class="form-label required-field">السنة الدراسية</label>
+                            <select class="form-select" id="academicYear" required>
+                                <option value="" selected disabled>اختر السنة الدراسية</option>
+                                <option value="1AS">الأولى ثانوي</option>
+                                <option value="2AS">الثانية ثانوي</option>
+                                <option value="3AS">الثالثة ثانوي</option>
+                                <option value="1MS">الأولى متوسط</option>
+                                <option value="2MS">الثانية متوسط</option>
+                                <option value="3MS">الثالثة متوسط</option>
+                                <option value="4MS">الرابعة متوسط</option>
+                                <option value="5MS">الخامسة متوسط</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="previousSchool" class="form-label">المدرسة السابقة</label>
+                            <input type="text" class="form-control" id="previousSchool">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h4 class="section-title"><i class="bi bi-person-hearts"></i> معلومات ولي الأمر</h4>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="parentName" class="form-label required-field">اسم ولي الأمر</label>
+                            <input type="text" class="form-control" id="parentName" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="parentPhone" class="form-label required-field">رقم الهاتف</label>
+                            <input type="tel" class="form-control" id="parentPhone" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="parentEmail" class="form-label required-field">البريد الإلكتروني</label>
+                            <input type="email" class="form-control" id="parentEmail" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="address" class="form-label">العنوان</label>
+                            <input type="text" class="form-control" id="address">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h4 class="section-title"><i class="bi bi-file-earmark-medical"></i> معلومات صحية</h4>
+                    <div class="mb-3">
+                        <label for="healthInfo" class="form-label">الحالة الصحية (إن وجدت)</label>
+                        <textarea class="form-control" id="healthInfo" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h4 class="section-title"><i class="bi bi-file-earmark-pdf"></i> المستندات المطلوبة</h4>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> يرجى تحميل المستندات التالية:
+                        <ul class="mt-2">
+                            <li>صورة شخصية للطالب</li>
+                            <li>صورة من شهادة الميلاد</li>
+                            <li>صورة من بطاقة ولي الأمر</li>
+                            <li>شهادة نقل من المدرسة السابقة (إن وجدت)</li>
+                        </ul>
+                    </div>
+                    <div class="mb-3">
+                        <label for="studentPhoto" class="form-label">صورة شخصية</label>
+                        <input type="file" class="form-control" id="studentPhoto" accept="image/*">
+                    </div>
+                    <div class="mb-3">
+                        <label for="birthCertificate" class="form-label">شهادة الميلاد</label>
+                        <input type="file" class="form-control" id="birthCertificate" accept="image/*,.pdf">
+                    </div>
+                    <div class="mb-3">
+                        <label for="parentId" class="form-label">بطاقة ولي الأمر</label>
+                        <input type="file" class="form-control" id="parentId" accept="image/*,.pdf">
+                    </div>
+                    <div class="mb-3">
+                        <label for="transferCertificate" class="form-label">شهادة النقل</label>
+                        <input type="file" class="form-control" id="transferCertificate" accept="image/*,.pdf">
+                    </div>
+                </div>
+
+                <div class="form-check mb-4">
+                    <input class="form-check-input" type="checkbox" id="agreeTerms" required>
+                    <label class="form-check-label" for="agreeTerms">
+                        أوافق على <a href="#" data-bs-toggle="modal" data-bs-target="#termsModal">الشروط والأحكام</a>
+                    </label>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary btn-lg" id="submitBtn">
+                        <i class="bi bi-send"></i> تقديم طلب التسجيل
+                    </button>
+                </div>
+            </div>
+
+            <div id="statusSection" class="text-center py-4" style="display: none;">
+                <h3 class="mb-3">حالة طلب التسجيل</h3>
+                <div id="statusBadge" class="status-badge badge bg-secondary mb-3">قيد المراجعة</div>
+                <p id="statusMessage" class="text-muted">تم استلام طلبك بنجاح وسيتم مراجعته من قبل الإدارة</p>
+                <div id="studentInfo" class="alert alert-info mt-3" style="display: none;">
+                    <p><strong>رقم الطالب:</strong> <span id="displayStudentId"></span></p>
+                    <p><strong>رقم الطلب:</strong> <span id="displayRequestId"></span></p>
+                </div>
+                <button class="btn btn-outline-primary mt-3" id="checkStatusBtn">
+                    <i class="bi bi-arrow-repeat"></i> التحقق من الحالة
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terms Modal -->
+    <div class="modal fade" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="termsModalLabel">الشروط والأحكام</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <h6>1. سياسة القبول</h6>
+                    <p>يتم قبول الطلاب وفقًا للشروط والمعايير التي تحددها المدرسة. يحق للمدرسة رفض أي طلب دون إبداء الأسباب.</p>
+                    
+                    <h6>2. المستندات المطلوبة</h6>
+                    <p>يجب تقديم جميع المستندات المطلوبة كاملة وصحيحة. أي تزوير في المستندات سيؤدي إلى رفض الطلب.</p>
+                    
+                    <h6>3. الرسوم الدراسية</h6>
+                    <p>يجب سداد الرسوم الدراسية وفقًا للجدول الزمني المحدد من قبل المدرسة. عدم السداد في الموعد المحدد قد يؤدي إلى إيقاف الطالب.</p>
+                    
+                    <h6>4. السلوك والانضباط</h6>
+                    <p>يجب على الطلاب الالتزام بأنظمة المدرسة وقوانينها. يحق للمدرسة اتخاذ الإجراءات التأديبية المناسبة في حالة مخالفة القوانين.</p>
+                    
+                    <h6>5. الخصوصية</h6>
+                    <p>سيتم التعامل مع جميع المعلومات المقدمة بسرية تامة ولن يتم مشاركتها مع أي جهات خارجية دون موافقة خطية من ولي الأمر.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">موافق</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Check Modal -->
+    <div class="modal fade" id="statusModal" tabindex="-1" aria-labelledby="statusModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="statusModalLabel">التحقق من حالة الطلب</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="statusStudentId" class="form-label">رقم الطالب أو الطلب</label>
+                        <input type="text" class="form-control" id="statusStudentId" placeholder="أدخل رقم الطالب أو الطلب">
+                    </div>
+                    <div class="mb-3">
+                        <label for="statusParentPhone" class="form-label">رقم هاتف ولي الأمر</label>
+                        <input type="tel" class="form-control" id="statusParentPhone" placeholder="أدخل رقم الهاتف المسجل">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-primary" id="checkStatusModalBtn">تحقق</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if there's a saved registration
+            const savedRegistration = localStorage.getItem('studentRegistration');
+            if (savedRegistration) {
+                const registration = JSON.parse(savedRegistration);
+                showStatusSection(registration.studentId, registration.parentPhone);
+            }
+
+            // Form submission
+            document.getElementById('submitBtn').addEventListener('click', async function() {
+                // Validate form
+                if (!validateForm()) {
+                    return;
+                }
+
+                // Collect form data
+                const formData = {
+                    name: document.getElementById('studentName').value,
+                    birthDate: document.getElementById('birthDate').value,
+                    academicYear: document.getElementById('academicYear').value,
+                    previousSchool: document.getElementById('previousSchool').value,
+                    parentName: document.getElementById('parentName').value,
+                    parentPhone: document.getElementById('parentPhone').value,
+                    parentEmail: document.getElementById('parentEmail').value,
+                    address: document.getElementById('address').value,
+                    healthInfo: document.getElementById('healthInfo').value,
+                    registrationData: {
+                        documents: [] // In a real app, you'd upload files to a server
+                    }
+                };
+
+                try {
+                    // Show loading
+                    const submitBtn = document.getElementById('submitBtn');
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> جاري الإرسال...';
+
+                    // Submit to server
+                    const response = await fetch('/api/student/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(formData)
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        // Save registration info
+                        const registrationInfo = {
+                            studentId: result.studentId,
+                            parentPhone: formData.parentPhone
+                        };
+                        localStorage.setItem('studentRegistration', JSON.stringify(registrationInfo));
+
+                        // Show success message
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'تمت العملية بنجاح',
+                            text: result.message,
+                            confirmButtonText: 'حسناً'
+                        });
+
+                        // Show status section
+                        showStatusSection(result.studentId, formData.parentPhone);
+                    } else {
+                        throw new Error(result.error || 'حدث خطأ أثناء التسجيل');
+                    }
+                } catch (err) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'خطأ',
+                        text: err.message,
+                        confirmButtonText: 'حسناً'
+                    });
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="bi bi-send"></i> تقديم طلب التسجيل';
+                }
+            });
+
+            // Check status button
+            document.getElementById('checkStatusBtn').addEventListener('click', checkRegistrationStatus);
+            document.getElementById('checkStatusModalBtn').addEventListener('click', checkRegistrationStatus);
+
+            // Function to validate form
+            function validateForm() {
+                const requiredFields = [
+                    'studentName', 'academicYear', 'parentName', 
+                    'parentPhone', 'parentEmail'
+                ];
+
+                let isValid = true;
+                requiredFields.forEach(fieldId => {
+                    const field = document.getElementById(fieldId);
+                    if (!field.value.trim()) {
+                        field.classList.add('is-invalid');
+                        isValid = false;
+                    } else {
+                        field.classList.remove('is-invalid');
+                    }
+                });
+
+                if (!document.getElementById('agreeTerms').checked) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'خطأ',
+                        text: 'يجب الموافقة على الشروط والأحكام',
+                        confirmButtonText: 'حسناً'
+                    });
+                    isValid = false;
+                }
+
+                // Validate phone number
+                const phone = document.getElementById('parentPhone').value;
+                if (phone && !/^[0-9]{10,15}$/.test(phone)) {
+                    document.getElementById('parentPhone').classList.add('is-invalid');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'خطأ',
+                        text: 'رقم الهاتف غير صحيح',
+                        confirmButtonText: 'حسناً'
+                    });
+                    isValid = false;
+                }
+
+                // Validate email
+                const email = document.getElementById('parentEmail').value;
+                if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    document.getElementById('parentEmail').classList.add('is-invalid');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'خطأ',
+                        text: 'البريد الإلكتروني غير صحيح',
+                        confirmButtonText: 'حسناً'
+                    });
+                    isValid = false;
+                }
+
+                return isValid;
+            }
+
+            // Function to show status section
+            function showStatusSection(studentId, parentPhone) {
+                document.getElementById('registrationForm').style.display = 'none';
+                document.getElementById('statusSection').style.display = 'block';
+                document.getElementById('displayRequestId').textContent = studentId;
+                document.getElementById('studentInfo').style.display = 'block';
+                
+                // Check status immediately
+                checkRegistrationStatus(studentId, parentPhone);
+            }
+
+            // Function to check registration status
+            async function checkRegistrationStatus(studentId = null, parentPhone = null) {
+                try {
+                    // If no parameters, get from modal
+                    if (!studentId || !parentPhone) {
+                        studentId = document.getElementById('statusStudentId').value;
+                        parentPhone = document.getElementById('statusParentPhone').value;
+                        
+                        if (!studentId || !parentPhone) {
+                            throw new Error('يجب إدخال رقم الطالب ورقم الهاتف');
+                        }
+                    }
+
+                    // Show loading
+                    const checkBtn = document.getElementById('checkStatusBtn');
+                    const originalText = checkBtn.innerHTML;
+                    checkBtn.disabled = true;
+                    checkBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> جاري التحقق...';
+
+                    // Check status with server
+                    const response = await fetch('/api/student/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            parentPhone: parentPhone,
+                            studentId: studentId
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        // Update status display
+                        const statusBadge = document.getElementById('statusBadge');
+                        const statusMessage = document.getElementById('statusMessage');
+                        const displayStudentId = document.getElementById('displayStudentId');
+                        
+                        if (result.status === 'pending') {
+                            statusBadge.className = 'status-badge badge bg-secondary mb-3';
+                            statusBadge.textContent = 'قيد المراجعة';
+                            statusMessage.textContent = 'طلبك قيد المراجعة من قبل الإدارة';
+                        } else if (result.status === 'active') {
+                            statusBadge.className = 'status-badge badge bg-success mb-3';
+                            statusBadge.textContent = 'مقبول';
+                            statusMessage.textContent = 'مبروك! تم قبول طلبك. يمكنك الآن تسجيل الدخول باستخدام رقم الطالب.';
+                            displayStudentId.textContent = result.studentId;
+                        } else if (result.status === 'inactive') {
+                            statusBadge.className = 'status-badge badge bg-danger mb-3';
+                            statusBadge.textContent = 'مرفوض';
+                            statusMessage.textContent = 'نأسف لإعلامك أن طلبك قد تم رفضه.';
+                        }
+                        
+                        // Hide modal if open
+                        const statusModal = bootstrap.Modal.getInstance(document.getElementById('statusModal'));
+                        if (statusModal) statusModal.hide();
+                    } else {
+                        throw new Error(result.error || 'حدث خطأ أثناء التحقق من الحالة');
+                    }
+                } catch (err) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'خطأ',
+                        text: err.message,
+                        confirmButtonText: 'حسناً'
+                    });
+                } finally {
+                    const checkBtn = document.getElementById('checkStatusBtn');
+                    if (checkBtn) {
+                        checkBtn.disabled = false;
+                        checkBtn.innerHTML = originalText;
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
