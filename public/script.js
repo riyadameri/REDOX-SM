@@ -8122,4 +8122,4 @@ async function printAttendanceSheet(liveClassId) {
         console.error('Error printing attendance sheet:', err);
         Swal.fire('خطأ', err.message || 'حدث خطأ أثناء تحضير وثيقة الغياب.', 'error');
     }
-}
+} 
