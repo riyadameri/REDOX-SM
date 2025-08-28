@@ -7,41 +7,49 @@ const socket = io(window.location.origin); // Connects to current host
 
 // Authentication functions
 async function login(username, password) {
-  try {
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ username, password })
-    });
-
-    const data = await response.json();
-
-    if (response.ok) {
-      // Save token and user data
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      
-      // Set current user
-      currentUser = data.user;
-      
-      // Update UI
-      document.getElementById('login-section').style.display = 'none';
-      document.getElementById('main-app').style.display = 'block';
-      document.getElementById('user-name').textContent = currentUser.fullName || currentUser.username;
-      document.getElementById('user-role').textContent = getRoleName(currentUser.role);
-      
-      // Initialize the app
-      initApp();
-    } else {
-      Swal.fire('خطأ', data.error || 'اسم المستخدم أو كلمة المرور غير صحيحة', 'error');
+    try {
+      // التحقق من الحقول الفارغة
+      if (!username || !password) {
+        Swal.fire('خطأ', 'يرجى إدخال اسم المستخدم وكلمة المرور', 'error');
+        return;
+      }
+  
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ username, password })
+      });
+  
+      const data = await response.json();
+  
+      if (response.ok) {
+        // Save token and user data
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        // Set current user
+        currentUser = data.user;
+        
+        // Update UI
+        document.getElementById('login-section').style.display = 'none';
+        document.getElementById('main-app').style.display = 'block';
+        document.getElementById('user-name').textContent = currentUser.fullName || currentUser.username;
+        document.getElementById('user-role').textContent = getRoleName(currentUser.role);
+        
+        // Initialize the app
+        initApp();
+      } else {
+        Swal.fire('خطأ', data.error || 'اسم المستخدم أو كلمة المرور غير صحيحة', 'error');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      Swal.fire('خطأ', 'حدث خطأ أثناء محاولة تسجيل الدخول', 'error');
     }
-  } catch (err) {
-    console.error('Login error:', err);
-    Swal.fire('خطأ', 'حدث خطأ أثناء محاولة تسجيل الدخول', 'error');
   }
-}
+
+
 
 async function register(userData) {
   try {
@@ -190,7 +198,8 @@ if (currentUser) {
     
   // تهيئة معالجة البطاقات في قسم إدارة البطاقات
   setupCardsManagementRFID();
-  
+  updateDashboardCounters();
+
 
   loadStudents();
   loadTeachers();
@@ -308,20 +317,9 @@ document.querySelectorAll('[data-section]').forEach(link => {
 // Event listeners
 document.getElementById('loginForm').addEventListener('submit', function(e) {
     e.preventDefault();
-    // Simulate login
-    Swal.fire({
-      title: 'تسجيل الدخول',
-      text: 'جاري التحقق من بيانات الدخول...',
-      icon: 'info',
-      showConfirmButton: false,
-      timer: 1500
-    }).then(() => {
-      document.getElementById('login-section').style.display = 'none';
-      document.getElementById('main-app').style.display = 'block';
-      // Set user info
-      document.getElementById('user-name').textContent = 'المستخدم';
-      document.getElementById('user-role').textContent = 'مدير النظام';
-    });
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    login(username, password);
   });
   
   document.getElementById('registerForm').addEventListener('submit', function(e) {
@@ -4001,66 +3999,63 @@ Swal.fire('خطأ', 'حدث خطأ أثناء البحث في البطاقات',
 
 
 
+// Navigation between sections - Fixed version
+document.querySelectorAll('.nav-link[data-section]').forEach(link => {
+    link.addEventListener('click', function(e) {
+      e.preventDefault();
+      
+      // Hide all sections
+      document.querySelectorAll('.content-section').forEach(section => {
+        section.classList.remove('active');
+      });
+      
+      // Remove active from all links
+      document.querySelectorAll('.nav-link').forEach(navLink => {
+        navLink.classList.remove('active');
+      });
+      
+      // Activate current link
+      this.classList.add('active');
+      
+      // Show requested section
+      const sectionId = this.getAttribute('data-section');
+      const sectionElement = document.getElementById(sectionId);
+      if (sectionElement) {
+        sectionElement.classList.add('active');
+      }
+      
+      // Load data when needed
+      if (sectionId === 'students') loadStudents();
+      else if (sectionId === 'teachers') loadTeachers();
+      else if (sectionId === 'classes') loadClasses();
+      else if (sectionId === 'classrooms') loadClassrooms();
+      else if (sectionId === 'payments') {
+        loadStudentsForPayments();
+        loadPayments();
+      }
+      else if (sectionId === 'cards') {
+        loadStudentsForCards();
+        loadCards();
+      }
+      else if (sectionId === 'registration-requests') {
+        loadRegistrationRequests();
+      }
+      else if (sectionId === 'student-accounts') {
+        loadStudentAccounts();
+      }
+      else if (sectionId === 'live-classes') {
+        loadLiveClasses();
+      }
+      else if (sectionId === 'gate-interface') {
+        initGateInterface();
+      }
+    });
+  });
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-// Update the navigation between sections code to include the new section
-document.querySelectorAll('[data-section]').forEach(link => {
-link.addEventListener('click', function(e) {
-e.preventDefault();
-
-// Hide all sections
-document.querySelectorAll('.content-section').forEach(section => {
-section.classList.remove('active');
-});
-
-// Remove active from all links
-document.querySelectorAll('.nav-link').forEach(navLink => {
-navLink.classList.remove('active');
-});
-
-// Activate current link
-this.classList.add('active');
-
-// Show requested section
-const sectionId = this.getAttribute('data-section');
-document.getElementById(sectionId).classList.add('active');
-
-// Load data when needed
-if (sectionId === 'students') loadStudents();
-else if (sectionId === 'teachers') loadTeachers();
-else if (sectionId === 'classes') loadClasses();
-else if (sectionId === 'classrooms') loadClassrooms();
-else if (sectionId === 'payments') {
-loadStudentsForPayments();
-loadPayments();
-}
-else if (sectionId === 'cards') {
-loadStudentsForCards();
-loadCards();
-}
-else if (sectionId === 'registration-requests') {
-loadRegistrationRequests();
-}
-});
-});
-// Load registration requests
-// Update the loadRegistrationRequests function
-// Update the loadRegistrationRequests function
 async function loadRegistrationRequests() {
 try {
 const status = document.getElementById('requestStatusFilter').value;
@@ -5781,6 +5776,44 @@ function simulateCardScan() {
     }, 3000);
   }
   
+
+  async function updateDashboardCounters() {
+    try {
+      // تحميل عدد الطلاب
+      const studentsResponse = await fetch('/api/students/count', {
+        headers: getAuthHeaders()
+      });
+      if (studentsResponse.ok) {
+        const studentsCount = await studentsResponse.json();
+        document.getElementById('studentsCount').textContent = studentsCount;
+      }
+  
+      // تحميل عدد الأساتذة
+      const teachersResponse = await fetch('/api/teachers/count', {
+        headers: getAuthHeaders()
+      });
+      if (teachersResponse.ok) {
+        const teachersCount = await teachersResponse.json();
+        document.getElementById('teachersCount').textContent = teachersCount;
+      }
+  
+      // تحميل عدد الحصص
+      const classesResponse = await fetch('/api/classes/count', {
+        headers: getAuthHeaders()
+      });
+      if (classesResponse.ok) {
+        const classesCount = await classesResponse.json();
+        document.getElementById('classesCount').textContent = classesCount;
+      }
+  
+    } catch (err) {
+      console.error('Error updating dashboard counters:', err);
+    }
+  }
+  
+  
+
+
   function loadSectionData(sectionId) {
     // In a real app, this would fetch data from the server
     console.log(`Loading data for ${sectionId} section`);
