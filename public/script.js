@@ -8075,7 +8075,7 @@ async function printAttendanceSheet(liveClassId) {
                         <div class="header-left">
                             <img src="assets/almarkaz.svg" alt="شعار المدرسة" class="school-logo">
                             <div class="school-info">
-                                <div class="school-name">${liveClass.class.school?.name || 'المركز الجزائري للعبقرية'}</div>
+                                <div class="school-name">${liveClass.class.school?.name || 'اكادمية الرواد للتعليم و المعارف'}</div>
                                 <div class="document-title">كشف الحضور والغياب</div>
                             </div>
                         </div>
