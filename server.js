@@ -3505,7 +3505,33 @@ try {
 });
 
 
+// في ملف server.js أو app.js
+app.get('/api/students/count', async (req, res) => {
+  try {
+    const count = await Student.countDocuments();
+    res.json(count);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
+app.get('/api/teachers/count', async (req, res) => {
+  try {
+    const count = await Teacher.countDocuments();
+    res.json(count);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/classes/count', async (req, res) => {
+  try {
+    const count = await Class.countDocuments();
+    res.json(count);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 const PORT = process.env.PORT || 4200;
 server.listen(PORT, () => {
@@ -3536,3 +3562,4 @@ process.on('warning', (warning) => {
 console.error('Warning:', warning);
 // application specific logging, throwing an error, or other logic here
 });
+
