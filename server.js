@@ -17,7 +17,7 @@ const server = require('http').createServer(app);
 
 const io = socketio(server, {
   cors: {
-    origin: "http://localhost:3000", // or "*" for development
+    origin: "*", // or "*" for development
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true
   },
