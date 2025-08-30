@@ -802,37 +802,38 @@ async function loadMonthsForPayments() {
     }
 }
 
+// Payment functions
 async function loadPayments(studentId = null, classId = null, month = null) {
     try {
         let url = '/api/payments';
         const params = [];
-        
+
         if (studentId) params.push(`student=${studentId}`);
         if (classId) params.push(`class=${classId}`);
         if (month) params.push(`month=${month}`);
-        
+
         if (params.length > 0) {
             url += `?${params.join('&')}`;
         }
-        
+
         const response = await fetch(url, {
             headers: getAuthHeaders()
         });
-        
+
         if (response.status === 401) {
             logout();
             return;
         }
-        
+
         const payments = await response.json();
-        
+
         const tableBody = document.getElementById('paymentsTable');
         tableBody.innerHTML = '';
-        
+
         payments.forEach((payment, index) => {
             const row = document.createElement('tr');
             row.classList.add(`payment-${payment.status}`);
-            
+
             row.innerHTML = `
                 <td>${index + 1}</td>
                 <td>${payment.student.name} (${payment.student.studentId})</td>
@@ -840,10 +841,10 @@ async function loadPayments(studentId = null, classId = null, month = null) {
                 <td>${payment.month}</td>
                 <td>${payment.amount} د.ك</td>
                 <td>
-                    <span class="badge ${payment.status === 'paid' ? 'bg-success' : 
-                                    payment.status === 'pending' ? 'bg-warning' : 'bg-danger'}">
-                        ${payment.status === 'paid' ? 'مسدد' : 
-                        payment.status === 'pending' ? 'قيد الانتظار' : 'متأخر'}
+                    <span class="badge ${payment.status === 'paid' ? 'bg-success' :
+                    payment.status === 'pending' ? 'bg-warning' : 'bg-danger'}">
+                        ${payment.status === 'paid' ? 'مسدد' :
+                    payment.status === 'pending' ? 'قيد الانتظار' : 'متأخر'}
                     </span>
                 </td>
                 <td>${payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : '-'}</td>
@@ -853,6 +854,11 @@ async function loadPayments(studentId = null, classId = null, month = null) {
                         ${payment.status === 'paid' ? 'disabled' : ''}>
                         <i class="bi bi-cash"></i>
                     </button>
+                    ${payment.status === 'paid' ? `
+                    <button class="btn btn-sm btn-info btn-action" onclick="reprintPaymentReceipt('${payment._id}')">
+                        <i class="bi bi-printer"></i>
+                    </button>
+                    ` : ''}
                 </td>
             `;
             tableBody.appendChild(row);
@@ -862,6 +868,710 @@ async function loadPayments(studentId = null, classId = null, month = null) {
         Swal.fire('خطأ', 'حدث خطأ أثناء تحميل بيانات المدفوعات', 'error');
     }
 }
+
+// Show payment modal
+window.showPaymentModal = async function (paymentId) {
+    try {
+        const paymentResponse = await fetch(`/api/payments/${paymentId}`, {
+            headers: getAuthHeaders()
+        });
+
+        if (paymentResponse.status === 401) {
+            logout();
+            return;
+        }
+
+        const payment = await paymentResponse.json();
+
+        const { value: formValues } = await Swal.fire({
+            title: 'تسديد الدفعة',
+            html: `
+                <div class="payment-modal-container p-3">
+                    <div class="mb-3">
+                        <label class="form-label">الطالب:</label>
+                        <input type="text" class="form-control" value="${payment.student?.name || 'غير معروف'}" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الحصة:</label>
+                        <input type="text" class="form-control" value="${payment.class?.name || 'غير معروف'}" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الشهر:</label>
+                        <input type="text" class="form-control" value="${payment.month || 'غير محدد'}" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">المبلغ:</label>
+                        <input type="text" class="form-control" value="${payment.amount || 0} د.ك" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">تاريخ الدفع:</label>
+                        <input type="date" id="payment-date" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">طريقة الدفع:</label>
+                        <select id="payment-method" class="form-select" required>
+                            <option value="cash">نقدي</option>
+                            <option value="bank">حوالة بنكية</option>
+                            <option value="online">دفع إلكتروني</option>
+                        </select>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="print-receipt" checked>
+                        <label class="form-check-label" for="print-receipt">
+                            طباعة الإيصال تلقائياً
+                        </label>
+                    </div>
+                </div>
+            `,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'تأكيد الدفع',
+            cancelButtonText: 'إلغاء',
+            preConfirm: () => {
+                return {
+                    paymentDate: document.getElementById('payment-date').value,
+                    paymentMethod: document.getElementById('payment-method').value,
+                    printReceipt: document.getElementById('print-receipt').checked
+                };
+            }
+        });
+
+        if (formValues) {
+            // Set default payment date to today if not provided
+            if (!formValues.paymentDate) {
+                formValues.paymentDate = new Date().toISOString().split('T')[0];
+            }
+
+            const response = await fetch(`/api/payments/${paymentId}/pay`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify({
+                    paymentDate: formValues.paymentDate,
+                    paymentMethod: formValues.paymentMethod
+                })
+            });
+
+            if (response.ok) {
+                const updatedPayment = await response.json();
+
+                // Print payment receipt automatically if requested
+                if (formValues.printReceipt) {
+                    await printPaymentReceiptToThermalPrinter(updatedPayment);
+                }
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'تم التسديد بنجاح',
+                    text: formValues.printReceipt ? 'تم تسجيل الدفعة وطباعة الإيصال' : 'تم تسجيل الدفعة بنجاح',
+                    confirmButtonText: 'حسناً'
+                });
+
+                // Refresh the students view
+                if (payment.class?._id) {
+                    showClassStudents(payment.class._id);
+                }
+                
+                // Refresh payments table
+                loadPayments();
+            } else {
+                throw new Error('فشل في تسجيل الدفعة');
+            }
+        }
+    } catch (err) {
+        console.error('Error:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'خطأ',
+            text: 'حدث خطأ أثناء محاولة تسجيل الدفعة',
+            confirmButtonText: 'حسناً'
+        });
+    }
+};
+
+// Reprint payment receipt
+window.reprintPaymentReceipt = async function (paymentId) {
+    try {
+        const response = await fetch(`/api/payments/${paymentId}`, {
+            headers: getAuthHeaders()
+        });
+
+        if (response.ok) {
+            const payment = await response.json();
+            await printPaymentReceiptToThermalPrinter(payment);
+        } else {
+            throw new Error('فشل في جلب بيانات الدفعة');
+        }
+    } catch (err) {
+        console.error('Error:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'خطأ',
+            text: 'حدث خطأ أثناء محاولة إعادة طباعة الإيصال',
+            confirmButtonText: 'حسناً'
+        });
+    }
+};
+
+// Print payment receipt to thermal printer
+async function printPaymentReceiptToThermalPrinter(payment) {
+    try {
+        let printSuccess = false;
+        
+        // محاولة الطباعة باستخدام الطابعة الافتراضية إذا كانت محددة
+        const defaultPrinter = localStorage.getItem('defaultPrinter');
+        if (defaultPrinter) {
+            printSuccess = await printWithDefaultPrinter(payment);
+        }
+        
+        // إذا لم تنجح الطباعة بالطابعة الافتراضية، جرب البحث عن طابعة
+        if (!printSuccess) {
+            printSuccess = await printToUSBPrinter(payment);
+        }
+        
+        if (printSuccess) {
+            Swal.fire({
+                icon: 'success',
+                title: 'تمت الطباعة',
+                text: 'تم إرسال الإيصال إلى الطابعة الحرارية بنجاح',
+                timer: 2000,
+                showConfirmButton: false
+            });
+            return;
+        }
+        
+        // إذا فشلت الطباعة الحرارية، استخدم الطباعة العادية
+        await printPaymentReceipt(payment);
+        
+    } catch (err) {
+        console.error('خطأ في الطباعة:', err);
+        // في حالة الخطأ، استخدم الطباعة العادية كبديل
+        await printPaymentReceipt(payment);
+    }
+}
+async function showPrinterSelection() {
+    try {
+        const printers = await getAvailableUSBPrinters();
+        
+        if (printers.length === 0) {
+            Swal.fire({
+                icon: 'info',
+                title: 'لا توجد طابعات',
+                text: 'لم يتم العثور على أي طابعات متصلة. يرجى توصيل طابعة والمحاولة مرة أخرى.',
+                confirmButtonText: 'حسناً'
+            });
+            return;
+        }
+        
+        const printerOptions = printers.reduce((options, printer, index) => {
+            options[index] = `${printer.manufacturerName || 'Unknown'} - ${printer.productName || `ID: ${printer.vendorId}:${printer.productId}`}`;
+            return options;
+        }, {});
+        
+        const { value: selectedIndex } = await Swal.fire({
+            title: 'اختر الطابعة',
+            input: 'select',
+            inputOptions: printerOptions,
+            inputPlaceholder: 'اختر طابعة',
+            showCancelButton: true,
+            confirmButtonText: 'تعيين كافتراضي',
+            cancelButtonText: 'إلغاء'
+        });
+        
+        if (selectedIndex !== undefined) {
+            localStorage.setItem('defaultPrinter', JSON.stringify(printers[selectedIndex]));
+            Swal.fire({
+                icon: 'success',
+                title: 'تم التعيين',
+                text: 'تم تعيين الطابعة الافتراضية بنجاح',
+                timer: 1500,
+                showConfirmButton: false
+            });
+        }
+    } catch (error) {
+        console.error('خطأ في عرض خيارات الطابعة:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'خطأ',
+            text: 'حدث خطأ أثناء محاولة عرض خيارات الطابعة',
+            confirmButtonText: 'حسناً'
+        });
+    }
+}
+function addPrinterManagementButton() {
+    // البحث عن مكان مناسب في الواجهة لإضافة الزر
+    const header = document.querySelector('.app-header');
+    
+    if (header) {
+        const printerButton = document.createElement('button');
+        printerButton.className = 'btn btn-outline-secondary me-2';
+        printerButton.innerHTML = '<i class="bi bi-printer"></i> إدارة الطابعات';
+        printerButton.onclick = showPrinterSelection;
+        
+        header.appendChild(printerButton);
+    }
+}
+document.addEventListener('DOMContentLoaded', function() {
+    addPrinterManagementButton();
+    
+    // محاولة إعداد طابعة افتراضية إذا لم تكن موجودة
+    if (!localStorage.getItem('defaultPrinter')) {
+        setupDefaultPrinter();
+    }
+});
+
+
+
+async function printToUSBPrinter(payment) {
+    return new Promise(async (resolve) => {
+        try {
+            // التحقق من دعم واجهة WebUSB API
+            if (!('usb' in navigator)) {
+                console.log('WebUSB API غير مدعومة في هذا المتصفح');
+                resolve(false);
+                return;
+            }
+            
+            // فلترة الطابعات الحرارية الشائعة
+            const VENDOR_IDS = {
+                'STAR': 0x0519,
+                'EPSON': 0x04B8,
+                'ZEBRA': 0x0A5F,
+                'BIXOLON': 0x1504,
+                'POSIFLEX': 0x1C3E
+            };
+            
+            // طلب إذن الوصول إلى جهاز USB
+            const device = await navigator.usb.requestDevice({
+                filters: Object.values(VENDOR_IDS).map(vendorId => ({ vendorId }))
+            });
+            
+            await device.open();
+            
+            // البحث عن واجهة الطابعة
+            let interfaceNumber;
+            for (const config of device.configurations) {
+                for (const iface of config.interfaces) {
+                    if (iface.alternate.endpoints.some(endpoint => 
+                        endpoint.direction === 'out')) {
+                        interfaceNumber = iface.interfaceNumber;
+                        break;
+                    }
+                }
+                if (interfaceNumber !== undefined) break;
+            }
+            
+            if (interfaceNumber === undefined) {
+                console.error('لم يتم العثور على واجهة طباعة مناسبة');
+                await device.close();
+                resolve(false);
+                return;
+            }
+            
+            await device.selectConfiguration(1);
+            await device.claimInterface(interfaceNumber);
+            
+            // إنشاء محتوى الإيصال للطابعة الحرارية
+            const receiptContent = formatReceiptForThermalPrinter(payment);
+            
+            // تحويل المحتوى إلى تنسيق يمكن إرساله
+            const encoder = new TextEncoder();
+            const data = encoder.encode(receiptContent);
+            
+            // البحث عن endpoint للإرسال
+            const endpoint = device.configuration.interfaces[interfaceNumber]
+                .alternate.endpoints.find(endpoint => endpoint.direction === 'out');
+            
+            if (!endpoint) {
+                console.error('لم يتم العثور على endpoint للإرسال');
+                await device.close();
+                resolve(false);
+                return;
+            }
+            
+            // إرسال البيانات إلى الطابعة
+            await device.transferOut(endpoint.endpointNumber, data);
+            
+            // إغلاق الاتصال
+            await device.close();
+            
+            resolve(true);
+            
+        } catch (error) {
+            console.error('فشل الطباعة على الطابعة الحرارية:', error);
+            
+            // إذا لم يتم اختيار جهاز، لا تعتبره خطأ
+            if (error.name === 'NotFoundError') {
+                console.log('لم يتم اختيار أي جهاز طباعة');
+            } else {
+                console.error('خطأ في الطباعة:', error);
+            }
+            
+            resolve(false);
+        }
+    });
+}
+
+
+async function printToThermalPrinter(payment) {
+    return new Promise(async (resolve) => {
+        try {
+            // التحقق من دعم واجهة Web Serial API
+            if (!('serial' in navigator)) {
+                console.log('Web Serial API غير مدعومة في هذا المتصفح');
+                resolve(false);
+                return;
+            }
+            
+            // طلب إذن الوصول إلى المنافذ التسلسلية
+            const port = await navigator.serial.requestPort();
+            await port.open({ baudRate: 9600 });
+            
+            // إنشاء محتوى الإيصال للطابعة الحرارية
+            const receiptContent = formatReceiptForThermalPrinter(payment);
+            
+            // تحويل المحتوى إلى تنسيق يمكن إرساله
+            const encoder = new TextEncoder();
+            const data = encoder.encode(receiptContent);
+            
+            const writer = port.writable.getWriter();
+            await writer.write(data);
+            
+            // إغلاق الاتصال
+            await writer.close();
+            await port.close();
+            
+            resolve(true);
+            
+        } catch (error) {
+            console.error('فشل الطباعة على الطابعة الحرارية:', error);
+            resolve(false);
+        }
+    });
+}
+
+// Check if thermal printer is available
+async function checkThermalPrinter() {
+    try {
+        // Try to detect thermal printer (COM1 for Windows)
+        if (navigator && navigator.parallel) {
+            // Check for parallel port printer (common for thermal printers)
+            const ports = await navigator.parallel.getPorts();
+            return ports.length > 0;
+        }
+        
+        // For browsers that don't support parallel port access,
+        // we'll assume the printer might be available
+        // In a real implementation, you would have more robust detection
+        return false; // Default to false for safety
+    } catch (err) {
+        console.log('Thermal printer not detected, using fallback');
+        return false;
+    }
+}
+
+// Format receipt for thermal printer (80mm width)
+function formatReceiptForThermalPrinter(payment) {
+    const now = new Date();
+    const receiptDate = now.toLocaleDateString('ar-EG');
+    const receiptTime = now.toLocaleTimeString('ar-EG');
+    
+    // تنسيق الإيصال للطابعة الحرارية (40 عمود)
+    let receipt = '\x1B\x40'; // تهيئة الطابعة
+    receipt += '\x1B\x61\x01'; // محاذاة إلى الوسط
+    
+    // العنوان
+    receipt += 'المركز الجزائري للعبقرية\n';
+    receipt += 'إيصال دفع شهري\n';
+    receipt += '====================\n\n';
+    
+    receipt += '\x1B\x61\x00'; // محاذاة لليسار
+    
+    // معلومات الإيصال
+    receipt += `التاريخ: ${receiptDate}\n`;
+    receipt += `الوقت: ${receiptTime}\n`;
+    receipt += `رقم الإيصال: PAY-${payment._id.slice(-6).toUpperCase()}\n`;
+    receipt += '────────────────────\n';
+    
+    // معلومات الطالب
+    receipt += `الطالب: ${payment.student?.name || 'غير معروف'}\n`;
+    receipt += `رقم الطالب: ${payment.student?.studentId || 'غير معروف'}\n`;
+    receipt += `الحصة: ${payment.class?.name || 'غير معروف'}\n`;
+    receipt += `الشهر: ${payment.month}\n`;
+    receipt += '────────────────────\n';
+    
+    // تفاصيل الدفع
+    receipt += `المبلغ: ${payment.amount} د.ك\n`;
+    receipt += `طريقة الدفع: ${getPaymentMethodName(payment.paymentMethod)}\n`;
+    receipt += `تاريخ الدفع: ${new Date(payment.paymentDate).toLocaleDateString('ar-EG')}\n`;
+    receipt += '────────────────────\n\n';
+    
+    receipt += '\x1B\x61\x01'; // محاذاة إلى الوسط
+    receipt += 'شكراً لكم\n';
+    receipt += 'نتمنى لطالبنا النجاح والتوفيق\n';
+    receipt += '\n\n\n\n';
+    
+    // قطع الورق (إن أمكن)
+    receipt += '\x1D\x56\x41\x03'; // أمر قطع الورق (ل大部分 الطابعات)
+    
+    return receipt;
+}
+
+
+async function getAvailableUSBPrinters() {
+    try {
+        if (!('usb' in navigator)) {
+            console.log('WebUSB API غير مدعومة في هذا المتصفح');
+            return [];
+        }
+        
+        // الحصول على الأجهزة المتاحة بالفعل
+        const devices = await navigator.usb.getDevices();
+        
+        return devices.map(device => ({
+            vendorId: device.vendorId,
+            productId: device.productId,
+            productName: device.productName,
+            manufacturerName: device.manufacturerName
+        }));
+    } catch (error) {
+        console.error('خطأ في الحصول على قائمة الطابعات:', error);
+        return [];
+    }
+}
+
+async function setupDefaultPrinter() {
+    try {
+        const printers = await getAvailableUSBPrinters();
+        
+        if (printers.length > 0) {
+            // حفظ معلومات الطابعة الأولى كافتراضية
+            localStorage.setItem('defaultPrinter', JSON.stringify(printers[0]));
+            console.log('تم تعيين الطابعة الافتراضية:', printers[0]);
+            return true;
+        }
+        
+        return false;
+    } catch (error) {
+        console.error('خطأ في إعداد الطابعة الافتراضية:', error);
+        return false;
+    }
+}
+async function printWithDefaultPrinter(payment) {
+    try {
+        const defaultPrinter = localStorage.getItem('defaultPrinter');
+        
+        if (!defaultPrinter) {
+            console.log('لا توجد طابعة افتراضية معينة');
+            return false;
+        }
+        
+        const printer = JSON.parse(defaultPrinter);
+        
+        // هنا يمكنك تنفيذ منطق الطباعة باستخدام معلومات الطابعة المخزنة
+        // هذا يعتمد على تنفيذك لمكتبة أو API معينة للطباعة
+        
+        console.log('جاري الطباعة على الطابعة الافتراضية:', printer);
+        
+        // في هذا المثال، سنستخدم نفس دالة الطباعة عبر USB
+        return await printToUSBPrinter(payment);
+        
+    } catch (error) {
+        console.error('خطأ في الطباعة باستخدام الطابعة الافتراضية:', error);
+        return false;
+    }
+}
+
+
+
+// دالة مساعدة للحصول على اسم طريقة الدفع بالعربية
+function getPaymentMethodName(method) {
+    const methods = {
+        'cash': 'نقدي',
+        'bank': 'حوالة بنكية',
+        'online': 'دفع إلكتروني'
+    };
+    
+    return methods[method] || method;
+}
+// Send content to thermal printer
+async function sendToThermalPrinter(content) {
+    try {
+        // This is a simplified version - in a real implementation,
+        // you would use a proper printer API or service
+        
+        // For browsers that support it, try using the Parallel Port API
+        if (navigator.parallel) {
+            const ports = await navigator.parallel.getPorts();
+            if (ports.length > 0) {
+                const port = ports[0];
+                await port.open({ baudRate: 9600 });
+                
+                const encoder = new TextEncoder();
+                const data = encoder.encode(content);
+                
+                await port.write(data);
+                await port.close();
+                
+                return true;
+            }
+        }
+        
+        // If no parallel port API, try using a local service
+        // This would typically require a desktop application bridge
+        console.log('Sending to thermal printer:', content);
+        
+        // For demonstration purposes, we'll just show the content
+        // that would be sent to the printer
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Thermal Printer Output</title>
+                <style>
+                    body { 
+                        font-family: monospace; 
+                        white-space: pre-wrap;
+                        width: 80mm;
+                        margin: 0;
+                        padding: 5mm;
+                        font-size: 12px;
+                    }
+                </style>
+            </head>
+            <body>${content.replace(/\n/g, '<br>')}</body>
+            </html>
+        `);
+        printWindow.document.close();
+        
+        return false;
+    } catch (err) {
+        console.error('Error sending to thermal printer:', err);
+        throw err;
+    }
+}
+
+// Original print payment receipt function (fallback)
+async function printPaymentReceipt(payment) {
+    return new Promise((resolve) => {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+
+        const doc = iframe.contentWindow.document;
+
+        doc.open();
+        doc.write(`
+            <!DOCTYPE html>
+            <html lang="ar" dir="rtl">
+            <head>
+                <meta charset="UTF-8">
+                <title>إيصال دفع</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        width: 80mm;
+                        margin: 0 auto;
+                        padding: 10px;
+                    }
+                    .header {
+                        text-align: center;
+                        margin-bottom: 15px;
+                    }
+                    .receipt-info {
+                        margin-bottom: 15px;
+                    }
+                    .receipt-info div {
+                        display: flex;
+                        justify-content: space-between;
+                        margin-bottom: 5px;
+                    }
+                    .footer {
+                        margin-top: 20px;
+                        text-align: center;
+                        font-size: 12px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h3>إيصال دفع</h3>
+                    <p>${new Date().toLocaleDateString('ar-EG')}</p>
+                </div>
+                
+                <div class="receipt-info">
+                    <div>
+                        <span>اسم الطالب:</span>
+                        <span>${payment.student?.name || 'غير معروف'}</span>
+                    </div>
+                    <div>
+                        <span>الحصة:</span>
+                        <span>${payment.class?.name || 'غير معروف'}</span>
+                    </div>
+                    <div>
+                        <span>الشهر:</span>
+                        <span>${payment.month}</span>
+                    </div>
+                    <div>
+                        <span>المبلغ:</span>
+                        <span>${payment.amount} د.ك</span>
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    <p>شكراً لكم</p>
+                    <p>${new Date().toLocaleTimeString('ar-EG')}</p>
+                </div>
+                
+                <script>
+                    window.onload = function() {
+                        setTimeout(function() {
+                            window.print();
+                            setTimeout(function() {
+                                window.close();
+                            }, 500);
+                        }, 500);
+                    };
+                </script>
+            </body>
+            </html>
+        `);
+        doc.close();
+
+        iframe.contentWindow.onafterprint = function() {
+            document.body.removeChild(iframe);
+            resolve();
+        };
+    });
+}
+
+
+// When student selection changes in payments section
+document.getElementById('paymentStudentSelect').addEventListener('change', function () {
+    loadPayments(this.value,
+        document.getElementById('paymentClassSelect').value,
+        document.getElementById('paymentMonthSelect').value);
+});
+
+// When class selection changes in payments section
+document.getElementById('paymentClassSelect').addEventListener('change', function () {
+    loadPayments(document.getElementById('paymentStudentSelect').value,
+        this.value,
+        document.getElementById('paymentMonthSelect').value);
+});
+
+// When month selection changes in payments section
+document.getElementById('paymentMonthSelect').addEventListener('change', function () {
+    loadPayments(document.getElementById('paymentStudentSelect').value,
+        document.getElementById('paymentClassSelect').value,
+        this.value);
+});
+
+
+
 async function loadStudentsForCards() {
     try {
         const response = await fetch('/api/students', {
@@ -1429,7 +2139,126 @@ window.removeSchedule = function(button) {
         item.querySelector('h6').textContent = `الحصة ${index + 1}`;
     });
 };
+window.showPaymentModal = async function(paymentId) {
+    try {
+        const paymentResponse = await fetch(`/api/payments/${paymentId}`, {
+            headers: getAuthHeaders()
+        });
 
+        if (paymentResponse.status === 401) {
+            logout();
+            return;
+        }
+
+        const payment = await paymentResponse.json();
+
+        const { value: formValues } = await Swal.fire({
+            title: 'تسديد الدفعة',
+            html: `
+                <div class="payment-modal-container p-3">
+                    <div class="mb-3">
+                        <label class="form-label">الطالب:</label>
+                        <input type="text" class="form-control" value="${payment.student?.name || 'غير معروف'}" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الحصة:</label>
+                        <input type="text" class="form-control" value="${payment.class?.name || 'غير معروف'}" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الشهر:</label>
+                        <input type="text" class="form-control" value="${payment.month || 'غير محدد'}" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">المبلغ:</label>
+                        <input type="text" class="form-control" value="${payment.amount || 0} د.ك" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">تاريخ الدفع:</label>
+                        <input type="date" id="payment-date" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">طريقة الدفع:</label>
+                        <select id="payment-method" class="form-select" required>
+                            <option value="cash">نقدي</option>
+                            <option value="bank">حوالة بنكية</option>
+                            <option value="online">دفع إلكتروني</option>
+                        </select>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="print-receipt" checked>
+                        <label class="form-check-label" for="print-receipt">
+                            طباعة الإيصال تلقائياً
+                        </label>
+                    </div>
+                </div>
+            `,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'تأكيد الدفع',
+            cancelButtonText: 'إلغاء',
+            preConfirm: () => {
+                return {
+                    paymentDate: document.getElementById('payment-date').value,
+                    paymentMethod: document.getElementById('payment-method').value,
+                    printReceipt: document.getElementById('print-receipt').checked
+                };
+            }
+        });
+
+        if (formValues) {
+            // تعيين تاريخ الدفع الافتراضي إذا لم يتم تقديمه
+            if (!formValues.paymentDate) {
+                formValues.paymentDate = new Date().toISOString().split('T')[0];
+            }
+
+            const response = await fetch(`/api/payments/${paymentId}/pay`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify({
+                    paymentDate: formValues.paymentDate,
+                    paymentMethod: formValues.paymentMethod
+                })
+            });
+
+            if (response.ok) {
+                const updatedPayment = await response.json();
+
+                // طباعة إيصال الدفع تلقائياً إذا طلب المستخدم ذلك
+                if (formValues.printReceipt) {
+                    await printPaymentReceiptToThermalPrinter(updatedPayment);
+                }
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'تم التسديد بنجاح',
+                    text: formValues.printReceipt ? 'تم تسجيل الدفعة وطباعة الإيصال' : 'تم تسجيل الدفعة بنجاح',
+                    confirmButtonText: 'حسناً'
+                });
+
+                // تحديث عرض الطلاب إذا كانت هناك حصة مرتبطة
+                if (payment.class?._id) {
+                    showClassStudents(payment.class._id);
+                }
+                
+                // تحديث جدول المدفوعات
+                loadPayments();
+            } else {
+                throw new Error('فشل في تسجيل الدفعة');
+            }
+        }
+    } catch (err) {
+        console.error('Error:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'خطأ',
+            text: 'حدث خطأ أثناء محاولة تسجيل الدفعة',
+            confirmButtonText: 'حسناً'
+        });
+    }
+};
 window.showPaymentModal = async function(paymentId) {
     try {
         const response = await fetch(`/api/payments/${paymentId}`, {

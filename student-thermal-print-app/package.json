@@ -1,0 +1,25 @@
+{
+  "name": "student-thermal-print-app",
+  "version": "1.0.0",
+  "description": "A project to print student information on thermal printers with QR code support.",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js"
+  },
+  "dependencies": {
+    "qrcode": "^1.4.4",
+    "serialport": "^10.4.0",
+    "usb": "^2.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  },
+  "keywords": [
+    "thermal",
+    "printer",
+    "student",
+    "QR code"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
