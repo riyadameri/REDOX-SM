@@ -186,6 +186,8 @@ function setupDashboardRFID() {
     }
 }
 function initApp() {
+    initAccountingEventListeners();
+
     // بدء خدمات الخلفية
 if (currentUser) {
     startAttendanceBackgroundService();
@@ -256,10 +258,27 @@ document.getElementById('gate-interface-link').addEventListener('click', functio
   // Initialize RFID input handling
   setupRFIDInputHandling();
 
-
   
 }
-
+function initAccountingEventListeners() {
+    // Budget form
+    const saveBudgetBtn = document.getElementById('saveBudgetBtn');
+    if (saveBudgetBtn) {
+      saveBudgetBtn.addEventListener('click', addBudget);
+    }
+    
+    // Expense form
+    const saveExpenseBtn = document.getElementById('saveExpenseBtn');
+    if (saveExpenseBtn) {
+      saveExpenseBtn.addEventListener('click', addExpense);
+    }
+    
+    // Refresh accounting data
+    const accountingLink = document.getElementById('accounting-link');
+    if (accountingLink) {
+      accountingLink.addEventListener('click', loadAccountingData);
+    }
+  }
 
 // Navigation between sections
 document.querySelectorAll('[data-section]').forEach(link => {
@@ -519,7 +538,25 @@ document.getElementById('show-register').addEventListener('click', function(e) {
     });
   });
   
-  
+  function showStudentModal(student) {
+    document.getElementById('modalStudentName').textContent = student.name;
+    document.getElementById('modalStudentId').textContent = student.studentId;
+    document.getElementById('modalParentName').textContent = student.parentName || '-';
+    document.getElementById('modalAcademicYear').textContent = getAcademicYearName(student.academicYear) || '-';
+    document.getElementById('modalClassesCount').textContent = student.classes?.length || 0;
+
+    // تعيين أحداث الأزرار داخل المودال
+    document.getElementById('modalEditBtn').onclick = () => editStudent(student._id);
+    document.getElementById('modalDeleteBtn').onclick = () => deleteStudent(student._id);
+    document.getElementById('modalEnrollBtn').onclick = () => showEnrollModal(student._id);
+    document.getElementById('modalAttendanceBtn').onclick = () => showAttendanceModal(student._id);
+    document.getElementById('modalPrintBtn').onclick = () => printRegistrationReceipt(`${student._id},600`);
+
+    // عرض المودال
+    const modal = new bootstrap.Modal(document.getElementById('studentModal'));
+    modal.show();
+}
+
 // Data loading functions (students, teachers, classes, etc.)
 async function loadStudents() {
     try {
@@ -539,6 +576,12 @@ async function loadStudents() {
         
         students.forEach((student, index) => {
             const row = document.createElement('tr');
+            row.style.cursor = 'pointer';
+        
+            row.addEventListener('click', () => {
+                showStudentModal(student);
+            });
+        
             row.innerHTML = `
                 <td>${index + 1}</td>
                 <td>${student.name}</td>
@@ -546,27 +589,10 @@ async function loadStudents() {
                 <td>${student.parentName || '-'}</td>
                 <td>${getAcademicYearName(student.academicYear) || '-'}</td>
                 <td>${student.classes?.length || 0}</td>
-                <td>
-                    <button class="btn btn-sm btn-outline-primary btn-action" onclick="editStudent('${student._id}')">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteStudent('${student._id}')">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-success btn-action" onclick="showEnrollModal('${student._id}')">
-                        <i class="bi bi-book"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-info btn-action" onclick="showAttendanceModal('${student._id}')">
-                        <i class="bi bi-clock-history"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-warning btn-action" onclick="printRegistrationReceipt('${student._id},600')">
-                        <i class="bi bi-cash"></i>
-                    </button>
-                    
-                </td>
             `;
             tableBody.appendChild(row);
         });
+        
         
         document.getElementById('studentsCount').textContent = students.length;
     } catch (err) {
@@ -8073,9 +8099,9 @@ async function printAttendanceSheet(liveClassId) {
                 <div class="page">
                     <div class="header">
                         <div class="header-left">
-                            <img src="assets/rouad.JPG" alt="شعار المدرسة" class="school-logo">
+                            <img src="assets/almarkaz.svg" alt="شعار المدرسة" class="school-logo">
                             <div class="school-info">
-                                <div class="school-name">${liveClass.class.school?.name || 'اكادمية الرواد للتعليم و المعارف'}</div>
+                                <div class="school-name">${liveClass.class.school?.name || 'المركز الجزائري للعبقرية'}</div>
                                 <div class="document-title">كشف الحضور والغياب</div>
                             </div>
                         </div>
@@ -8156,3 +8182,412 @@ async function printAttendanceSheet(liveClassId) {
         Swal.fire('خطأ', err.message || 'حدث خطأ أثناء تحضير وثيقة الغياب.', 'error');
     }
 } 
+
+
+
+// Initialize accounting section
+function initAccountingSection() {
+    loadAccountingData();
+    setupAccountingEventListeners();
+    
+    // Set default date to today for expense form
+    document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
+  }
+  
+  // Load accounting data
+  async function loadAccountingData() {
+    try {
+      // Load balance data
+      const balanceResponse = await fetch('/api/accounting/balance', {
+        headers: getAuthHeaders()
+      });
+      
+      if (balanceResponse.ok) {
+        const balanceData = await balanceResponse.json();
+        updateBalanceUI(balanceData);
+      }
+      
+      // Load today's stats
+      const todayStatsResponse = await fetch('/api/accounting/today-stats', {
+        headers: getAuthHeaders()
+      });
+      
+      if (todayStatsResponse.ok) {
+        const todayStats = await todayStatsResponse.json();
+        updateTodayStatsUI(todayStats);
+      }
+      
+      // Load transactions
+      const transactionsResponse = await fetch('/api/accounting/transactions?limit=50', {
+        headers: getAuthHeaders()
+      });
+      
+      if (transactionsResponse.ok) {
+        const transactions = await transactionsResponse.json();
+        renderTransactionsTable(transactions);
+      }
+      
+    } catch (err) {
+      console.error('Error loading accounting data:', err);
+      Swal.fire('خطأ', 'حدث خطأ أثناء تحميل بيانات المحاسبة', 'error');
+    }
+  }
+  
+  // Update balance UI
+  function updateBalanceUI(balanceData) {
+    const totalBudgetEl = document.getElementById('totalBudget');
+    const totalIncomeEl = document.getElementById('totalIncome');
+    const totalExpensesEl = document.getElementById('totalExpenses');
+    const remainingBalanceEl = document.getElementById('remainingBalance');
+    
+    if (totalBudgetEl) totalBudgetEl.textContent = `${balanceData.balance || 0} د.ج`;
+    if (totalIncomeEl) totalIncomeEl.textContent = `${balanceData.income || 0} د.ج`;
+    if (totalExpensesEl) totalExpensesEl.textContent = `${balanceData.expenses || 0} د.ج`;
+    if (remainingBalanceEl) remainingBalanceEl.textContent = `${balanceData.balance || 0} د.ج`;
+  }
+  
+  function updateTodayStatsUI(stats) {
+    const todayIncomeEl = document.getElementById('todayIncome');
+    const todayExpensesEl = document.getElementById('todayExpenses');
+    const todayProfitEl = document.getElementById('todayProfit');
+    
+    if (todayIncomeEl) todayIncomeEl.textContent = `${stats.income || 0} د.ج`;
+    if (todayExpensesEl) todayExpensesEl.textContent = `${stats.expenses || 0} د.ج`;
+    if (todayProfitEl) todayProfitEl.textContent = `${(stats.income || 0) - (stats.expenses || 0)} د.ج`;
+  }
+  
+  // Render transactions table
+  function renderTransactionsTable(transactions) {
+    const tableBody = document.getElementById('transactionsTable');
+    tableBody.innerHTML = '';
+    
+    if (transactions.length === 0) {
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="7" class="text-center py-4 text-muted">لا توجد معاملات مسجلة</td>
+        </tr>
+      `;
+      return;
+    }
+    
+    transactions.forEach((transaction, index) => {
+      const row = document.createElement('tr');
+      
+      const typeBadge = transaction.type === 'income' ? 
+        '<span class="badge bg-success">إيراد</span>' : 
+        '<span class="badge bg-danger">مصروف</span>';
+      
+      row.innerHTML = `
+        <td>${new Date(transaction.date).toLocaleDateString('ar-EG')}</td>
+        <td>${typeBadge}</td>
+        <td>${transaction.description || 'لا يوجد وصف'}</td>
+        <td>${transaction.amount} د.ج</td>
+        <td>${transaction.category || 'عام'}</td>
+        <td>${transaction.recordedBy?.username || 'نظام'}</td>
+        <td>
+          <button class="btn btn-sm btn-outline-info" onclick="viewTransactionDetails('${transaction._id}')">
+            <i class="bi bi-eye"></i>
+          </button>
+        </td>
+      `;
+      tableBody.appendChild(row);
+    });
+  }
+  
+  // Load recipients for expense form
+  async function loadRecipientsForExpenses() {
+    try {
+      // Load teachers
+      const teachersResponse = await fetch('/api/teachers', {
+        headers: getAuthHeaders()
+      });
+      
+      // Load employees
+      const employeesResponse = await fetch('/api/employees', {
+        headers: getAuthHeaders()
+      });
+      
+      if (teachersResponse.ok && employeesResponse.ok) {
+        const teachers = await teachersResponse.json();
+        const employees = await employeesResponse.json();
+        
+        const recipientSelect = document.getElementById('expenseRecipient');
+        recipientSelect.innerHTML = '<option value="">اختر المستلم</option>';
+        
+        // Add teachers
+        teachers.forEach(teacher => {
+          const option = document.createElement('option');
+          option.value = `teacher_${teacher._id}`;
+          option.textContent = `${teacher.name} (معلم)`;
+          option.dataset.type = 'teacher';
+          recipientSelect.appendChild(option);
+        });
+        
+        // Add employees
+        employees.forEach(employee => {
+          const option = document.createElement('option');
+          option.value = `staff_${employee._id}`;
+          option.textContent = `${employee.fullName} (موظف)`;
+          option.dataset.type = 'staff';
+          recipientSelect.appendChild(option);
+        });
+        
+        // Add other option
+        const otherOption = document.createElement('option');
+        otherOption.value = 'other';
+        otherOption.textContent = 'أخرى';
+        otherOption.dataset.type = 'other';
+        recipientSelect.appendChild(otherOption);
+      }
+    } catch (err) {
+      console.error('Error loading recipients:', err);
+    }
+  }
+  
+  // Setup accounting event listeners
+  function setupAccountingEventListeners() {
+    // Save budget button
+    document.getElementById('saveBudgetBtn').addEventListener('click', addBudget);
+    
+    // Save expense button
+    document.getElementById('saveExpenseBtn').addEventListener('click', addExpense);
+    
+    // Update recipient options when type changes
+    document.getElementById('expenseRecipientType').addEventListener('change', function() {
+      updateRecipientOptions(this.value);
+    });
+    
+    // Update recipient type when expense type changes
+    document.getElementById('expenseType').addEventListener('change', function() {
+      if (this.value === 'teacher_payment') {
+        document.getElementById('expenseRecipientType').value = 'teacher';
+      } else if (this.value === 'staff_salary') {
+        document.getElementById('expenseRecipientType').value = 'staff';
+      } else {
+        document.getElementById('expenseRecipientType').value = 'other';
+      }
+      updateRecipientOptions(document.getElementById('expenseRecipientType').value);
+    });
+    
+    // Initialize recipient options
+    updateRecipientOptions('teacher');
+  }
+  
+  // Update recipient options based on type
+  function updateRecipientOptions(recipientType) {
+    const recipientSelect = document.getElementById('expenseRecipient');
+    const options = recipientSelect.options;
+    
+    for (let i = 0; i < options.length; i++) {
+      const option = options[i];
+      if (option.value === "" || option.value === "other") continue;
+      
+      if (option.dataset.type === recipientType) {
+        option.style.display = '';
+      } else {
+        option.style.display = 'none';
+      }
+    }
+    
+    // Select the first visible option
+    for (let i = 0; i < options.length; i++) {
+      if (options[i].style.display !== 'none' && options[i].value !== "") {
+        recipientSelect.value = options[i].value;
+        break;
+      }
+    }
+  }
+  
+  // Add budget
+  async function addBudget() {
+    const budgetData = {
+      type: document.getElementById('budgetType').value,
+      amount: parseFloat(document.getElementById('budgetAmount').value),
+      description: document.getElementById('budgetDescription').value
+    };
+    
+    try {
+      const response = await fetch('/api/accounting/budget', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify(budgetData)
+      });
+      
+      if (response.ok) {
+        Swal.fire('نجاح', 'تم إضافة الميزانية بنجاح', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('addBudgetModal')).hide();
+        document.getElementById('addBudgetForm').reset();
+        loadAccountingData();
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'حدث خطأ أثناء إضافة الميزانية');
+      }
+    } catch (err) {
+      console.error('Error adding budget:', err);
+      Swal.fire('خطأ', err.message, 'error');
+    }
+  }
+  
+  // Add expense
+  async function addExpense() {
+    const recipientValue = document.getElementById('expenseRecipient').value;
+    const [recipientType, recipientId] = recipientValue.includes('_') ? 
+      recipientValue.split('_') : [recipientValue, null];
+    
+    const expenseData = {
+      description: document.getElementById('expenseDescription').value,
+      amount: parseFloat(document.getElementById('expenseAmount').value),
+      category: document.getElementById('expenseCategory').value,
+      type: document.getElementById('expenseType').value,
+      recipient: {
+        type: recipientType,
+        id: recipientId,
+        name: document.getElementById('expenseRecipient').options[document.getElementById('expenseRecipient').selectedIndex].text
+      },
+      paymentMethod: document.getElementById('expensePaymentMethod').value,
+      date: document.getElementById('expenseDate').value
+    };
+    
+    try {
+      const response = await fetch('/api/accounting/expenses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify(expenseData)
+      });
+      
+      if (response.ok) {
+        Swal.fire('نجاح', 'تم تسجيل المصروف بنجاح', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('addExpenseModal')).hide();
+        document.getElementById('addExpenseForm').reset();
+        loadAccountingData();
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'حدث خطأ أثناء تسجيل المصروف');
+      }
+    } catch (err) {
+      console.error('Error adding expense:', err);
+      Swal.fire('خطأ', err.message, 'error');
+    }
+  }
+  
+  // View transaction details
+  async function viewTransactionDetails(transactionId) {
+    try {
+      const response = await fetch(`/api/accounting/transactions/${transactionId}`, {
+        headers: getAuthHeaders()
+      });
+      
+      if (response.ok) {
+        const transaction = await response.json();
+        
+        Swal.fire({
+          title: 'تفاصيل المعاملة',
+          html: `
+            <div class="text-start">
+              <p><strong>النوع:</strong> ${transaction.type === 'income' ? 'إيراد' : 'مصروف'}</p>
+              <p><strong>المبلغ:</strong> ${transaction.amount} د.ج</p>
+              <p><strong>الوصف:</strong> ${transaction.description || 'لا يوجد'}</p>
+              <p><strong>الفئة:</strong> ${transaction.category || 'عام'}</p>
+              <p><strong>التاريخ:</strong> ${new Date(transaction.date).toLocaleDateString('ar-EG')}</p>
+              <p><strong>مسجل بواسطة:</strong> ${transaction.recordedBy?.username || 'نظام'}</p>
+            </div>
+          `,
+          icon: 'info',
+          confirmButtonText: 'حسناً'
+        });
+      }
+    } catch (err) {
+      console.error('Error viewing transaction details:', err);
+    }
+  }
+  
+  // Generate financial report
+  async function generateFinancialReport() {
+    const startDate = document.getElementById('reportStartDate').value;
+    const endDate = document.getElementById('reportEndDate').value;
+    
+    if (!startDate || !endDate) {
+      Swal.fire('خطأ', 'يرجى تحديد تاريخ البداية والنهاية', 'error');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/accounting/reports/financial?startDate=${startDate}&endDate=${endDate}`, {
+        headers: getAuthHeaders()
+      });
+      
+      if (response.ok) {
+        const report = await response.json();
+        displayFinancialReport(report);
+      } else {
+        throw new Error('فشل في إنشاء التقرير');
+      }
+    } catch (err) {
+      console.error('Error generating financial report:', err);
+      Swal.fire('خطأ', err.message, 'error');
+    }
+  }
+  
+  // Display financial report
+  function displayFinancialReport(report) {
+    const reportResults = document.getElementById('reportResults');
+    
+    const html = `
+      <div class="card">
+        <div class="card-header">
+          <h6 class="mb-0">التقرير المالي للفترة من ${report.period.startDate} إلى ${report.period.endDate}</h6>
+        </div>
+        <div class="card-body">
+          <div class="row mb-4">
+            <div class="col-md-4">
+              <div class="card bg-success text-white text-center">
+                <div class="card-body">
+                  <h6 class="card-title">إجمالي الإيرادات</h6>
+                  <h4>${report.revenue.total || 0} د.ج</h4>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card bg-danger text-white text-center">
+                <div class="card-body">
+                  <h6 class="card-title">إجمالي المصروفات</h6>
+                  <h4>${report.expenses.total || 0} د.ج</h4>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card bg-info text-white text-center">
+                <div class="card-body">
+                  <h6 class="card-title">صافي الربح</h6>
+                  <h4>${(report.revenue.total || 0) - (report.expenses.total || 0)} د.ج</h4>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <h6>تفصيل المصروفات حسب الفئة:</h6>
+          <ul class="list-group">
+            ${Object.entries(report.expensesByCategory || {}).map(([category, amount]) => `
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                ${category}
+                <span class="badge bg-danger rounded-pill">${amount} د.ج</span>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      </div>
+    `;
+    
+    reportResults.innerHTML = html;
+  }
+  
+  // Add event listener for accounting section
+  document.getElementById('accounting-link').addEventListener('click', function() {
+    initAccountingSection();
+  });
