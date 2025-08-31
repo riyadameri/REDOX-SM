@@ -226,14 +226,41 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  padding-top: var(--header-height);
 }
 
-.container-fluid {
-  padding: 0;
+header {
+  width: 100%;
+  margin: 0; 
 }
 
-.row {
-  margin: 0;
+
+#main-app {
+  padding-top: var(--header-height);
+  min-height: calc(100vh - var(--header-height));
+}
+
+.main-content {
+  margin-right: var(--sidebar-width);
+  width: calc(100% - var(--sidebar-width));
+  padding-top: 1rem; 
+}
+
+/* Responsive: remove right margin when sidebar is hidden/small */
+@media (max-width: 992px) {
+  #main-app {
+    padding-top: var(--header-height);
+  }
+
+  .main-content {
+    margin-right: 0;
+    width: 100%;
+  }
+
+  .app-header {
+    width: 100%;
+    right: 0;
+  }
 }
 
 /* Sidebar Styling */
@@ -242,46 +269,20 @@ body {
 .sidebar {
   background: linear-gradient(135deg, var(--dark-color), #34495e);
   color: white;
-  min-height: 100vh;
-  padding: 2rem 1rem;
   position: fixed;
+  top: var(--header-height);;
+  right: 0;
+  bottom: 0;
   width: var(--sidebar-width);
+  padding: 2rem 1rem;
   box-shadow: 2px 0 30px rgba(0, 0, 0, 0.2);
   z-index: 1000;
   transition: all var(--transition-speed);
   transform-style: preserve-3d;
-  
-  /* Improved scrollbar styling */
-  overflow-y: auto;
-  height: 100vh; /* Ensure full viewport height */
-  scrollbar-width: thin; /* For Firefox */
-  scrollbar-color: rgba(255, 255, 255, 0.3) transparent; /* For Firefox */
+  overflow: hidden;
+  background: var(--sidebar-bg);
 }
 
-/* Custom scrollbar for WebKit browsers (Chrome, Safari, Edge) */
-.sidebar::-webkit-scrollbar {
-  width: 8px;
-}
-
-.sidebar::-webkit-scrollbar-track {
-  background: transparent;
-  margin: 10px 0; /* Add some margin at top/bottom */
-}
-
-.sidebar::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.sidebar::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.5);
-}
-
-/* Make sure content is tall enough to scroll */
-.sidebar-content {
-  min-height: calc(100% + 1px); /* Force scrollable area */
-}
 .student-photo {
   width: 100px;
   height: 100px;
@@ -794,8 +795,9 @@ body {
   box-shadow: var(--box-shadow);
   position: fixed;
   top: 0;
+  left: 0;                   
   right: 0;
-  width: calc(100% - var(--sidebar-width));
+  width: auto;              
   z-index: 999;
   display: flex;
   align-items: center;
@@ -804,68 +806,12 @@ body {
   animation: slideInUp 0.5s ease-out;
 }
 
-.header-title {
-  color: white;
-  font-weight: 700;
-  font-size: 1.5rem;
-  margin-right: auto;
-  display: flex;
-  align-items: center;
-  text-shadow: 0 2px 5px rgba(0,0,0,0.2);
-}
-
-.header-title i {
-  margin-left: 0.75rem;
-  font-size: 1.8rem;
-  animation: pulse 2s infinite;
-}
-
-/* Calendar Styles */
-.calendar-container {
-  background: white;
-  border-radius: var(--border-radius);
-  overflow: hidden;
-  box-shadow: var(--box-shadow);
-  transition: all 0.4s ease;
-}
-
-.calendar-container:hover {
-  transform: translateY(-5px);
-  box-shadow: var(--box-shadow-lg);
-}
-
-.calendar-header {
-  background: var(--gradient-primary);
-  color: white;
-  padding: 1rem;
-  text-align: center;
-  font-weight: 600;
-}
-
-.calendar-day {
-  padding: 0.5rem;
-  text-align: center;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.calendar-day:hover {
-  background: rgba(67, 97, 238, 0.1);
-  transform: scale(1.1);
-}
-
-.calendar-day.today {
-  background: var(--accent-color);
-  color: white;
-  border-radius: 50%;
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  animation: pulse 2s infinite;
-  box-shadow: 0 0 0 3px rgba(247, 37, 133, 0.3);
+@media (max-width: 992px) {
+  .app-header {
+    left: 0;
+    right: 0;
+    width: 100%;
+  }
 }
 
 /* Logo Effects */
@@ -1451,7 +1397,12 @@ body {
   padding: 2rem 1rem;
   box-shadow: 2px 0 30px rgba(0, 0, 0, 0.2);
   z-index: 1000;
-  position: relative;
+  /* anchor full height and prevent internal scrolling */
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
 }
 
 .sidebar h3 {
