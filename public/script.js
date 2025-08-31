@@ -1765,6 +1765,9 @@ document.getElementById('saveStudentBtn').addEventListener('click', async () => 
                 showConfirmButton: false
             });
 
+            // RESET THE FORM HERE
+            document.getElementById('addStudentForm').reset();
+            
             // Print receipt automatically
             await printRegistrationReceipt(newStudent, 600);
 
