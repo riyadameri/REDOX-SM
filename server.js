@@ -4219,6 +4219,9 @@ app.put('/api/payments/:id/amount', async (req, res) => {
   app.get('cards-auth',(req,res)=>{
     res.sendFile(path.join(__dirname, 'public', 'cards-auth.html'));
   })
+  app.get('dore',(req,res)=>{
+    res.sendFile(path.join(__dirname, 'public', 'dore.html'));
+  })
   
 
   // Admin dashboard
