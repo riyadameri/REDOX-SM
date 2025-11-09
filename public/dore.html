@@ -34,6 +34,28 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            transition: all 0.3s ease;
+        }
+        
+        .fullscreen-mode {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 9999;
+            border-radius: 0;
+            box-shadow: none;
+        }
+        
+        /* إضافة كلاس جديد لملء الشاشة الكامل */
+        .fullscreen-active {
+            width: 100vw !important;
+            height: 100vh !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            z-index: 9999 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
         }
         
         .header-section {
@@ -42,6 +64,29 @@
             padding: 15px;
             text-align: center;
             flex-shrink: 0;
+            position: relative;
+        }
+        
+        .fullscreen-toggle {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .fullscreen-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
         }
         
         .school-logo {
@@ -115,6 +160,13 @@
             border: 1px solid #dee2e6;
             overflow: hidden;
             margin-bottom: 15px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .student-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         }
         
         .student-header {
@@ -135,6 +187,31 @@
             object-fit: cover;
             border: 3px solid #dee2e6;
             margin-bottom: 10px;
+        }
+        
+        .student-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .info-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f1f1;
+        }
+        
+        .info-item:last-child {
+            border-bottom: none;
+        }
+        
+        .info-icon {
+            width: 30px;
+            text-align: center;
+            margin-left: 10px;
+            color: var(--primary-color);
         }
         
         .attendance-success {
@@ -214,11 +291,14 @@
     </style>
 </head>
 <body>
-    <div class="attendance-container">
+    <div class="attendance-container" id="attendanceContainer">
         <!-- Header Section -->
         <div class="header-section">
+            <button class="fullscreen-toggle" id="fullscreenToggle" title="وضع ملء الشاشة">
+                <i class="bi bi-arrows-fullscreen"></i>
+            </button>
             <div class="d-flex justify-content-center align-items-center">
-                <img src="https://via.placeholder.com/150" alt="شعار الأكاديمية" class="school-logo me-3">
+                <img src="assets/rouad.JPG" alt="شعار الأكاديمية" class="school-logo me-3">
                 <div>
                     <h2 class="mb-1">أكاديمية الرواد للتعليم والمعارف</h2>
                     <p class="mb-0">نظام تسجيل الحضور الآلي</p>
@@ -302,6 +382,7 @@
         let socket;
         let recentScans = [];
         let currentClass = null;
+        let isFullscreen = false;
         
         // تهيئة التطبيق عند تحميل الصفحة
         document.addEventListener('DOMContentLoaded', function() {
@@ -328,6 +409,93 @@
             
             // تحميل السجلات الحديثة من التخزين المحلي
             loadRecentScans();
+            
+            // إعداد زر وضع ملء الشاشة
+            setupFullscreenToggle();
+            
+            // إعداد معالج حدث الخروج من وضع ملء الشاشة بالضغط على ESC
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && isFullscreen) {
+                    exitFullscreen();
+                }
+            });
+        }
+        
+        // إعداد زر وضع ملء الشاشة
+        function setupFullscreenToggle() {
+            const toggleBtn = document.getElementById('fullscreenToggle');
+            const container = document.getElementById('attendanceContainer');
+            
+            toggleBtn.addEventListener('click', function() {
+                if (!isFullscreen) {
+                    // تفعيل وضع ملء الشاشة
+                    enterFullscreen(container);
+                } else {
+                    // إلغاء وضع ملء الشاشة
+                    exitFullscreen();
+                }
+            });
+        }
+        
+        // الدخول إلى وضع ملء الشاشة
+        function enterFullscreen(element) {
+            if (element.requestFullscreen) {
+                element.requestFullscreen();
+            } else if (element.webkitRequestFullscreen) { /* Safari */
+                element.webkitRequestFullscreen();
+            } else if (element.msRequestFullscreen) { /* IE11 */
+                element.msRequestFullscreen();
+            } else if (element.mozRequestFullScreen) { /* Firefox */
+                element.mozRequestFullScreen();
+            }
+            
+            // إضافة كلاس ملء الشاشة
+            element.classList.add('fullscreen-active');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('fullscreenToggle').innerHTML = '<i class="bi bi-fullscreen-exit"></i>';
+            isFullscreen = true;
+        }
+        
+        // الخروج من وضع ملء الشاشة
+        function exitFullscreen() {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) { /* Safari */
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { /* IE11 */
+                document.msExitFullscreen();
+            } else if (document.mozCancelFullScreen) { /* Firefox */
+                document.mozCancelFullScreen();
+            }
+            
+            // إزالة كلاس ملء الشاشة
+            const container = document.getElementById('attendanceContainer');
+            container.classList.remove('fullscreen-active');
+            document.body.style.overflow = '';
+            document.getElementById('fullscreenToggle').innerHTML = '<i class="bi bi-arrows-fullscreen"></i>';
+            isFullscreen = false;
+        }
+        
+        // استمع لتغيرات وضع ملء الشاشة
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+        
+        function handleFullscreenChange() {
+            const container = document.getElementById('attendanceContainer');
+            const fullscreenElement = document.fullscreenElement || 
+                                     document.webkitFullscreenElement || 
+                                     document.mozFullScreenElement || 
+                                     document.msFullscreenElement;
+            
+            if (!fullscreenElement) {
+                // تم الخروج من وضع ملء الشاشة
+                container.classList.remove('fullscreen-active');
+                document.body.style.overflow = '';
+                document.getElementById('fullscreenToggle').innerHTML = '<i class="bi bi-arrows-fullscreen"></i>';
+                isFullscreen = false;
+            }
         }
         
         // تحديث الوقت الحالي
@@ -393,6 +561,8 @@
                     const cardId = e.target.value.trim();
                     if (cardId) {
                         processCardScan(cardId);
+                        // تنظيف حقل الإدخال بعد الضغط على Enter
+                        cardInput.value = '';
                     }
                 }
             });
@@ -585,7 +755,7 @@
             const studentImage = student.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=3498db&color=fff&size=100`;
             
             resultElement.innerHTML = `
-                <div class="student-card">
+                <div class="student-card" onclick="viewStudentDetails('${student._id}')">
                     <div class="student-header">
                         <h5 class="mb-1">تم التعرف على الطالب</h5>
                         <p class="mb-0">رقم البطاقة: ${cardUid}</p>
@@ -599,13 +769,45 @@
                                 <p class="text-muted">${student.studentId}</p>
                             </div>
                             <div class="col-md-8">
-                                <div class="mb-3">
-                                    <strong>معلومات الطالب:</strong>
-                                    <p class="mb-1">الصف: ${getAcademicYearName(student.academicYear) || 'غير محدد'}</p>
-                                    <p class="mb-1">ولي الأمر: ${student.parentName || 'غير محدد'}</p>
-                                    <p class="mb-0">هاتف ولي الأمر: ${student.parentPhone || 'غير محدد'}</p>
+                                <div class="student-info-grid">
+                                    <div class="info-item">
+                                        <div class="info-icon">
+                                            <i class="bi bi-mortarboard"></i>
+                                        </div>
+                                        <div>
+                                            <strong>الصف:</strong>
+                                            <p class="mb-0">${getAcademicYearName(student.academicYear) || 'غير محدد'}</p>
+                                        </div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-icon">
+                                            <i class="bi bi-person"></i>
+                                        </div>
+                                        <div>
+                                            <strong>ولي الأمر:</strong>
+                                            <p class="mb-0">${student.parentName || 'غير محدد'}</p>
+                                        </div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-icon">
+                                            <i class="bi bi-telephone"></i>
+                                        </div>
+                                        <div>
+                                            <strong>هاتف ولي الأمر:</strong>
+                                            <p class="mb-0">${student.parentPhone || 'غير محدد'}</p>
+                                        </div>
+                                    </div>
+                                    <div class="info-item">
+                                        <div class="info-icon">
+                                            <i class="bi bi-calendar"></i>
+                                        </div>
+                                        <div>
+                                            <strong>تاريخ التسجيل:</strong>
+                                            <p class="mb-0">${new Date(student.createdAt).toLocaleDateString('ar-EG')}</p>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="text-center">
+                                <div class="text-center mt-3">
                                     <div class="spinner-border text-primary" role="status">
                                         <span class="visually-hidden">جاري تسجيل الحضور...</span>
                                     </div>
@@ -628,7 +830,7 @@
             playSuccessSound();
             
             resultElement.innerHTML = `
-                <div class="student-card">
+                <div class="student-card" onclick="viewStudentDetails('${result.student._id}')">
                     <div class="student-header ${statusClass}">
                         <h5 class="mb-1"><i class="bi bi-check-circle me-2"></i>تم تسجيل الحضور</h5>
                         <p class="mb-0">الحالة: ${statusText}</p>
@@ -956,6 +1158,13 @@
             if (data.student) {
                 handleStudentCard(data.student, data.card.uid);
             }
+        }
+        
+        // عرض تفاصيل الطالب
+        function viewStudentDetails(studentId) {
+            // يمكن تنفيذ الانتقال إلى صفحة تفاصيل الطالب هنا
+            alert(`سيتم الانتقال إلى صفحة تفاصيل الطالب ${studentId}`);
+            // window.location.href = `/students/${studentId}`;
         }
     </script>
 </body>
