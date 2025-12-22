@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>إيصال دفع</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      width: 280px;
+      margin: auto;
+      background: #fff;
+    }
+
+    .receipt {
+      border: 1px dashed #000;
+      padding: 20px;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .line {
+      border-bottom: 1px dashed #000;
+      margin: 10px 0;
+    }
+
+    .print-btn {
+      display: block;
+      margin: 20px auto;
+      padding: 10px 20px;
+      background: black;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    @media print {
+      .print-btn {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="receipt" id="receipt">
+    <h2>إيصال دفع</h2>
+    <div>التاريخ: <span id="date"></span></div>
+    <div>الطالب: خالد العتيبي</div>
+    <div>الحصة: علوم</div>
+    <div>المبلغ: 25 د.ك</div>
+    <div>رقم الفاتورة: INV-<span id="invoice"></span></div>
+    <div class="line"></div>
+    <div style="text-align: center;">شكراً لكم</div>
+  </div>
+
+  <button class="print-btn" onclick="window.print()">🖨️ طباعة</button>
+
+  <script>
+    document.getElementById("date").textContent = new Date().toLocaleDateString('ar-EG');
+    document.getElementById("invoice").textContent = Date.now();
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>إدارة حسابات الطلبة</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      direction: rtl;
+      background-color: #f4f6f9;
+      padding: 20px;
+    }
+
+    h1, h2 {
+      text-align: center;
+      color: #2c3e50;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background-color: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: center;
+      border: 1px solid #ddd;
+    }
+
+    th {
+      background-color: #2ecc71;
+      color: white;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+
+    .loading {
+      text-align: center;
+      margin-top: 40px;
+      color: #777;
+    }
+
+    .error {
+      color: red;
+      text-align: center;
+    }
+
+    form {
+      margin: 30px auto;
+      padding: 20px;
+      max-width: 500px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    button {
+      background-color: #27ae60;
+      color: white;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+      font-size: 16px;
+    }
+
+    button:hover {
+      background-color: #219150;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>قائمة حسابات الطلبة</h1>
+
+  <div id="loading" class="loading">...جاري تحميل البيانات</div>
+  <div id="error" class="error"></div>
+
+  <table id="studentTable" style="display: none;">
+    <thead>
+      <tr>
+        <th>الاسم الكامل</th>
+        <th>اسم المستخدم</th>
+        <th>معرّف الطالب</th>
+        <th>الحالة</th>
+      </tr>
+    </thead>
+    <tbody id="studentTableBody">
+      <!-- سيتم ملء البيانات هنا -->
+    </tbody>
+  </table>
+
+  <h2>إنشاء حساب طالب</h2>
+  <form id="createAccountForm">
+    <label for="studentIdInput">معرف الطالب</label>
+    <input type="text" id="studentIdInput" required />
+
+    <label for="fullNameInput">الاسم الكامل</label>
+    <input type="text" id="fullNameInput" required />
+
+    <label for="usernameInput">اسم المستخدم</label>
+    <input type="text" id="usernameInput" required />
+
+    <label for="passwordInput">كلمة المرور</label>
+    <input type="password" id="passwordInput" required />
+
+    <button type="submit">إنشاء الحساب</button>
+  </form>
+
+  <script>
+    const API_BASE = "http://localhost:4200";
+
+    async function fetchStudentAccounts() {
+      const table = document.getElementById("studentTable");
+      const tbody = document.getElementById("studentTableBody");
+      const loading = document.getElementById("loading");
+      const error = document.getElementById("error");
+
+      try {
+        const response = await fetch(`${API_BASE}/api/student-accounts`);
+        if (!response.ok) throw new Error("فشل في جلب البيانات من الخادم");
+
+        const students = await response.json();
+        loading.style.display = "none";
+
+        if (students.length === 0) {
+          error.textContent = "لا توجد حسابات طلاب لعرضها.";
+          return;
+        }
+
+        table.style.display = "table";
+        tbody.innerHTML = ""; // إعادة تفريغ الجدول قبل إعادة تعبئته
+
+        students.forEach(student => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${student.fullName || '---'}</td>
+            <td>${student.username}</td>
+            <td>${student.studentId}</td>
+            <td>${student.active ? 'مفعل' : 'غير مفعل'}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      } catch (err) {
+        loading.style.display = "none";
+        error.textContent = err.message;
+      }
+    }
+
+    // استدعاء لجلب البيانات عند التحميل
+    document.addEventListener("DOMContentLoaded", fetchStudentAccounts);
+
+    // إرسال نموذج إنشاء الحساب
+    document.getElementById("createAccountForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const studentId = document.getElementById("studentIdInput").value.trim();
+      const fullName = document.getElementById("fullNameInput").value.trim();
+      const username = document.getElementById("usernameInput").value.trim();
+      const password = document.getElementById("passwordInput").value;
+
+      if (!studentId || !fullName || !username || !password) return;
+
+      try {
+        const response = await fetch(`${API_BASE}/api/student/create-account/${studentId}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            fullName,
+            username,
+            password,
+            studentId
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.error || "حدث خطأ أثناء إنشاء الحساب");
+        } else {
+          alert("✅ تم إنشاء الحساب بنجاح!");
+          e.target.reset();
+          fetchStudentAccounts(); // تحديث القائمة
+        }
+      } catch (err) {
+        alert("حدث خطأ في الاتصال بالخادم");
+      }
+    });
+  </script>
+
+</body>
+</html>

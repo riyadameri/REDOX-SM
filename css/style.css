@@ -1,0 +1,79 @@
+/* تنسيقات عامة للواجهة العربية */
+body {
+    font-family: 'Tajawal', sans-serif;
+    background-color: #f8f9fa;
+}
+
+.table th {
+    text-align: right;
+}
+/* Add these styles to your existing CSS */
+.printer-status {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.printer-connected {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.printer-disconnected {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.printer-connecting {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+/* تنسيقات البطاقات */
+.card {
+    margin-bottom: 20px;
+    border: none;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+/* تنسيقات الأزرار */
+.btn {
+    margin-left: 5px;
+}
+
+/* تنسيقات الجداول */
+.table-responsive {
+    margin-top: 20px;
+}
+
+/* تنسيقات النصوص العربية */
+.text-ar {
+    direction: rtl;
+    text-align: right;
+}
+
+/* تنسيقات البادجات */
+.badge {
+    font-weight: normal;
+    padding: 5px 10px;
+}
+
+/* تنسيقات خاصة بالرواتب */
+.salary-paid {
+    background-color: #e8f5e9;
+}
+
+.salary-pending {
+    background-color: #fff8e1;
+}
+
+.salary-late {
+    background-color: #ffebee;
+}
