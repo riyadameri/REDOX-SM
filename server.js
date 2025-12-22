@@ -4219,7 +4219,7 @@ app.put('/api/payments/:id/amount', async (req, res) => {
 
 
   // Main application entry point
-  const angularPath = path.join(__dirname, 'adminApp/dist/admin-app/browser');
+  const angularPath = path.join(__dirname, 'dist/admin-app/browser');
   app.use(express.static(angularPath));
   
     // Main application entry point
