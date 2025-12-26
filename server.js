@@ -27,17 +27,23 @@ require('dotenv').config();
 
   // Middleware
 // Add this BEFORE all other routes and middleware
-app.use(cors({
-  origin: ['http://localhost:4200', 'https://your-angular-app.com'], // Add your frontend URLs
+// Replace this CORS configuration in your server.js:
+// Use this CORS configuration instead:
+const corsOptions = {
+  origin: '*', // Allow all origins or specify your frontend URL  
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true,
   preflightContinue: false,
-  optionsSuccessStatus: 204
-}));
+  optionsSuccessStatus: 204,
+  exposedHeaders: ['Content-Range', 'X-Content-Range'] // Optional: if you need custom headers
+};
 
-// Handle preflight requests for all routes
-app.options('*', cors());
+app.use(cors(corsOptions));
+
+// Handle OPTIONS requests explicitly for all routes
+app.options('*', cors(corsOptions));
+// Handle OPTIONS requests (preflight)
 
 
   app.use(express.json());
@@ -429,6 +435,34 @@ liveClassSchema.pre('save', function(next) {
   const StudentAccount = mongoose.model('StudentAccount', StudentsAccountsSchema);
   // RFID Reader Implementation
 
+
+
+ //count students number
+ app.get('/api/count/students', async (req, res) => {
+    try {
+        const count = await Student.countDocuments();
+        res.json({ count, status: 'success' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to count students', status: 'error' });
+    }
+  });
+  app.get('/api/count/teachers', async (req, res) => {
+    try {
+        const count = await Teacher.countDocuments();
+        res.json({ count, status: 'success' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to count teachers', status: 'error' });
+    }
+  });
+  //count lessons
+  app.get('/api/count/classes', async (req, res) => {
+    try {
+        const count = await Class.countDocuments();
+        res.json({ count, status: 'success' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to count classes', status: 'error' });
+    }
+  });
 
 
   // Authorized Cards Management
@@ -883,15 +917,9 @@ const optionalAuth = (req, res, next) => {
   // Students
   // get only active students
 // Replace this problematic code in /api/students endpoint:
-app.get('/api/students', authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
+app.get('/api/students', async (req, res) => {
   try {
-    const { academicYear, active } = req.query;
-    const query = { status: 'active' };
-
-    if (academicYear) query.academicYear = academicYear;
-    if (active !== undefined) query.active = active === 'true';
-
-    const students = await Student.find(query)
+    const students = await Student.find()
       .populate('classes')
       .sort({ name: 1 });
     
@@ -914,6 +942,8 @@ const validateObjectId = (req, res, next) => {
 
 
 
+
+
   //get all students
   // app.get('/api/allstudents',/* authenticate(['admin', 'secretary', 'accountant']), */ ()=>{
   //   try {
@@ -926,9 +956,104 @@ const validateObjectId = (req, res, next) => {
 
 
 
+// في server.js
+
+// الحصول على جدول دراسة القاعة
+app.get('/api/classrooms/:id/schedule', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  try {
+    const classroomId = req.params.id;
+    
+    // الحصول على جميع الحصص التي تستخدم هذه القاعة
+    const classesWithThisClassroom = await Class.find({
+      'schedule.classroom': classroomId
+    })
+      .populate('teacher')
+      .populate('schedule.classroom')
+      .populate('students');
+    
+    // تحويل البيانات إلى جدول
+    const schedule = [];
+    classesWithThisClassroom.forEach(cls => {
+      cls.schedule.forEach(session => {
+        if (session.classroom._id.toString() === classroomId) {
+          schedule.push({
+            classId: cls._id,
+            className: cls.name,
+            subject: cls.subject,
+            teacher: cls.teacher?.name || 'غير معروف',
+            day: session.day,
+            time: session.time,
+            duration: 120 // يمكن حسابها من وقت البداية والنهاية
+          });
+        }
+      });
+    });
+    
+    // ترتيب الجدول حسب اليوم والوقت
+    const dayOrder = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+    schedule.sort((a, b) => {
+      const dayDiff = dayOrder.indexOf(a.day) - dayOrder.indexOf(b.day);
+      if (dayDiff !== 0) return dayDiff;
+      return a.time.localeCompare(b.time);
+    });
+    
+    res.json(schedule);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// الحصول على الحصص الحالية في القاعة
+app.get('/api/classrooms/:id/current-classes', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  try {
+    const classroomId = req.params.id;
+    const now = new Date();
+    const day = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'][now.getDay()];
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    // الحصول على جميع الحصص المجدولة اليوم
+    const classesToday = await Class.find({
+      'schedule.classroom': classroomId,
+      'schedule.day': day
+    })
+      .populate('teacher')
+      .populate('students');
+    
+    const currentClasses = [];
+    
+    classesToday.forEach(cls => {
+      cls.schedule.forEach(session => {
+        if (session.classroom.toString() === classroomId) {
+          const [hour, minute] = session.time.split(':').map(Number);
+          // افتراض أن الحصة مدتها ساعتين
+          const startMinutes = hour * 60 + minute;
+          const endMinutes = startMinutes + 120;
+          const currentMinutes = currentHour * 60 + currentMinute;
+          
+          if (currentMinutes >= startMinutes && currentMinutes <= endMinutes) {
+            currentClasses.push({
+              class: cls.name,
+              subject: cls.subject,
+              teacher: cls.teacher?.name,
+              startTime: session.time,
+              endTime: `${Math.floor(endMinutes / 60)}:${(endMinutes % 60).toString().padStart(2, '0')}`,
+              studentsCount: cls.students.length
+            });
+          }
+        }
+      });
+    });
+    
+    res.json(currentClasses);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
   // activate student
-  app.put('/api/students/:id/activate', authenticate(['admin', 'secretary']), async (req, res) => {
+  app.put('/api/students/:id/activate',  async (req, res) => {
     try {
       const student = await Student.findById(req.params.id);
       if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
@@ -940,7 +1065,7 @@ const validateObjectId = (req, res, next) => {
     }
   });
 
-  app.post('/api/students', authenticate(['admin', 'secretary']), async (req, res) => {
+  app.post('/api/students',  async (req, res) => {
     try {
       const { name, parentPhone, studentId } = req.body;
       
@@ -1174,6 +1299,81 @@ const validateObjectId = (req, res, next) => {
   });
   // get monthly atandance for class  using live classes shema
 
+  // Get available classes for student enrollment
+// Get available classes (classes that are not full and match certain criteria)
+// app.get('/api/classes/available', authenticate(['admin', 'secretary', 'accountant', 'teacher']), async (req, res) => {
+//   try {
+//     const { 
+//       studentId, 
+//       academicYear, 
+//       subject, 
+//       excludeEnrolled = 'true',
+//       limit = 50 
+//     } = req.query;
+    
+//     // Build query
+//     const query = {};
+    
+//     if (academicYear) {
+//       query.academicYear = academicYear;
+//     }
+    
+//     if (subject) {
+//       query.subject = subject;
+//     }
+    
+//     // Get classes
+//     const classes = await Class.find(query)
+//       .populate('teacher', 'name subjects phone email')
+//       .populate('students', 'name studentId academicYear')
+//       .populate('schedule.classroom', 'name capacity location')
+//       .limit(parseInt(limit))
+//       .sort({ name: 1 });
+    
+//     let availableClasses = classes;
+    
+//     // Filter out classes the student is already enrolled in
+//     if (studentId && excludeEnrolled === 'true') {
+//       const student = await Student.findById(studentId);
+//       if (student && student.classes) {
+//         const enrolledClassIds = student.classes.map(c => c.toString());
+//         availableClasses = classes.filter(c => !enrolledClassIds.includes(c._id.toString()));
+//       }
+//     }
+    
+//     // You might also want to filter by capacity
+//     // availableClasses = availableClasses.filter(c => c.students.length < (c.capacity || 50));
+    
+//     res.json({
+//       success: true,
+//       count: availableClasses.length,
+//       classes: availableClasses
+//     });
+//   } catch (err) {
+//     console.error('Error in /api/classes/available:', err);
+//     res.status(500).json({ 
+//       success: false,
+//       error: 'Failed to fetch available classes',
+//       message: err.message 
+//     });
+//   }
+// });
+
+// Add this endpoint with the other class endpoints
+app.get('/api/classes/available', async (req, res) => {
+  try {
+    const classes = await Class.find({})
+      .populate('teacher')
+      .populate('students')
+      .populate('schedule.classroom')
+      .sort({ name: 1 });
+    
+    res.json(classes);
+  } catch (err) {
+    console.error('Error fetching available classes:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 // الحصول على الغيابات الشهرية لحصة معينة
 app.get('/api/classes/:classId/monthly-attendance', async (req, res) => {
   try {
@@ -1638,7 +1838,7 @@ async function getClassAttendanceData(classId, queryParams = {}) {
 }
 
 
-app.get('/api/teachers/:id/details', authenticate(['admin', 'accountant', 'teacher']), async (req, res) => {
+app.get('/api/teachers/:id/details',  async (req, res) => {
   try {
     const teacherId = req.params.id;
     
@@ -1834,7 +2034,7 @@ app.post('/api/teachers/:id/pay-salary', authenticate(['admin', 'accountant']), 
 });
 
 
-app.post('/api/teachers/pay-all-salaries', authenticate(['admin', 'accountant']), async (req, res) => {
+app.post('/api/teachers/pay-all-salaries',  async (req, res) => {
   try {
     const { month, paymentMethod, paymentDate } = req.body;
     
@@ -2016,7 +2216,7 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
 });
 
 
-  app.get('/api/students/:id', validateObjectId, authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
+  app.get('/api/students/:id', validateObjectId, async (req, res) => {
     try {
       const student = await Student.findById(req.params.id).populate('classes');
       if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
@@ -2026,7 +2226,7 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
     }
   });
   
-  app.put('/api/students/:id', authenticate(['admin', 'secretary']), async (req, res) => {
+  app.put('/api/students/:id',  async (req, res) => {
     try {
       const student = await Student.findByIdAndUpdate(
         req.params.id,
@@ -2039,7 +2239,7 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
     }
   });
 
-  app.delete('/api/students/:id', authenticate(['admin']), async (req, res) => {
+  app.delete('/api/students/:id',  async (req, res) => {
     try {
       // Remove student from classes first
       await Class.updateMany(
@@ -2062,7 +2262,7 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
   });
 
   // Teachers
-  app.get('/api/teachers', authenticate(['admin', 'secretary']), async (req, res) => {
+  app.get('/api/teachers', async (req, res) => {
     try {
       const teachers = await Teacher.find().sort({ name: 1 });
       res.json(teachers);
@@ -2071,7 +2271,7 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
     }
   });
 
-  app.post('/api/teachers', authenticate(['admin']), async (req, res) => {
+  app.post('/api/teachers', async (req, res) => {
     try {
       const { name, phone, email } = req.body;
       
@@ -2106,7 +2306,7 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
   });
   
 
-  app.get('/api/teachers/:id', authenticate(['admin', 'secretary']), async (req, res) => {
+  app.get('/api/teachers/:id',  async (req, res) => {
     try {
       const teacher = await Teacher.findById(req.params.id);
       if (!teacher) return res.status(404).json({ error: 'الأستاذ غير موجود' });
@@ -2116,7 +2316,7 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
     }
   });
 
-  app.put('/api/teachers/:id', authenticate(['admin']), async (req, res) => {
+  app.put('/api/teachers/:id',  async (req, res) => {
     try {
       const teacher = await Teacher.findByIdAndUpdate(
         req.params.id,
@@ -2129,7 +2329,7 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
     }
   });
 
-  app.delete('/api/teachers/:id', authenticate(['admin']), async (req, res) => {
+  app.delete('/api/teachers/:id',  async (req, res) => {
     try {
       // Remove teacher from classes first
       await Class.updateMany(
@@ -2147,7 +2347,7 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
   });
 
   // Classrooms
-  app.get('/api/classrooms', authenticate(['admin', 'secretary']), async (req, res) => {
+  app.get('/api/classrooms',  async (req, res) => {
     try {
       const classrooms = await Classroom.find().sort({ name: 1 });
       res.json(classrooms);
@@ -2186,39 +2386,55 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
     }
   });
 
-  app.post('/api/classes', authenticate(['admin', 'secretary']), async (req, res) => {
-    try {
-      const { name, subject, teacher, academicYear } = req.body;
-      
-      // التحقق من وجود حصة بنفس الاسم والمادة والأستاذ والسنة الدراسية
-      const existingClass = await Class.findOne({
-        name,
-        subject,
-        teacher,
-        academicYear
-      });
-  
-      if (existingClass) {
-        return res.status(200).json({ 
-          message: "تم تحديث المعلومات بنجاح",
-          class: existingClass,
-          existed: true
-        });
-      }
-  
-      const classObj = new Class(req.body);
-      await classObj.save();
-      
-      res.status(201).json({
-        message: "تم إنشاء الحصة بنجاح",
-        class: classObj,
-        existed: false
-      });
-    } catch (err) {
-      res.status(400).json({ error: err.message });
-    }
-  });
+// In your server.js, add logging to the /api/classes POST endpoint:
+app.post('/api/classes', authenticate(['admin', 'secretary']), async (req, res) => {
+  try {
+    console.log('Received class creation request:', req.body); // Add this line
+    
+    const { name, subject, teacher, academicYear } = req.body;
+    
+    // التحقق من وجود حصة بنفس الاسم والمادة والأستاذ والسنة الدراسية
+    const existingClass = await Class.findOne({
+      name,
+      subject,
+      teacher,
+      academicYear
+    });
 
+    if (existingClass) {
+      return res.status(200).json({ 
+        message: "تم تحديث المعلومات بنجاح",
+        class: existingClass,
+        existed: true
+      });
+    }
+
+    console.log('Creating new class with data:', req.body); // Add this line
+    
+    const classObj = new Class(req.body);
+    await classObj.save();
+    
+    res.status(201).json({
+      message: "تم إنشاء الحصة بنجاح",
+      class: classObj,
+      existed: false
+    });
+  } catch (err) {
+    console.error('Error creating class:', err); // Make sure this is logging
+    console.error('Error details:', err.message, err.errors); // Add more details
+    
+    // Return more specific error messages
+    let errorMessage = err.message;
+    if (err.name === 'ValidationError') {
+      errorMessage = 'خطأ في البيانات: ';
+      for (const field in err.errors) {
+        errorMessage += `${field}: ${err.errors[field].message}; `;
+      }
+    }
+    
+    res.status(400).json({ error: errorMessage });
+  }
+});
   app.get('/api/classes/:id', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
     try {
       const classObj = await Class.findById(req.params.id)
@@ -2404,7 +2620,7 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
 
   // API للتسجيل الجماعي للطالب في عدة حصص
 // API للتسجيل الجماعي للطالب في عدة حصص
-app.post('/api/students/:studentId/enroll-multiple', authenticate(['admin', 'secretary']), async (req, res) => {
+app.post('/api/students/:studentId/enroll-multiple',  async (req, res) => {
   try {
       const { classIds } = req.body;
       
@@ -2679,7 +2895,7 @@ app.get('/api/live-classes/:classId/monthly-attendance', authenticate(['admin', 
   });
 
 // تقرير الغيابات الشهرية لطالب معين
-app.get('/api/students/:studentId/monthly-attendance', authenticate(['admin', 'secretary', 'teacher', 'student']), async (req, res) => {
+app.get('/api/students/:studentId/monthly-attendance', async (req, res) => {
   try {
     const { studentId } = req.params;
     const { month, year } = req.query;
@@ -3093,7 +3309,8 @@ app.put('/api/payments/:id/pay', authenticate(['admin', 'secretary', 'accountant
   }
 });
 
-app.get('/api/payments',  async (req, res) => {
+// في server.js - تحديث endpoint المدفوعات
+app.get('/api/payments', authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
   try {
     const { student, class: classId, month, status } = req.query;
     const query = {};
@@ -3725,7 +3942,42 @@ app.put('/api/payments/:id/amount', async (req, res) => {
   });
 
 
+// Add this endpoint in your server.js file, near the other payment endpoints:
 
+// Get payments for a specific student
+app.get('/api/payments/student/:studentId',  async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { status, startDate, endDate } = req.query;
+    
+    // Build query
+    const query = { student: studentId };
+    
+    if (status) query.status = status;
+    if (startDate || endDate) {
+      query.paymentDate = {};
+      if (startDate) query.paymentDate.$gte = new Date(startDate);
+      if (endDate) query.paymentDate.$lte = new Date(endDate);
+    }
+    
+    const payments = await Payment.find(query)
+      .populate('student')
+      .populate({
+        path: 'class',
+        populate: [
+          { path: 'teacher', model: 'Teacher' },
+          { path: 'schedule.classroom', model: 'Classroom' }
+        ]
+      })
+      .populate('recordedBy')
+      .sort({ month: -1, paymentDate: -1 });
+    
+    res.json(payments);
+  } catch (err) {
+    console.error('Error fetching student payments:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
   // Student Registration Endpoint
@@ -4217,16 +4469,14 @@ app.put('/api/payments/:id/amount', async (req, res) => {
   });
 
 
+const angularPath = path.join(__dirname, 'dist/admin-app/browser');
+app.use(express.static(angularPath));
 
   // Main application entry point
-  const angularPath = path.join(__dirname, 'dist/admin-app/browser');
-  app.use(express.static(angularPath));
-  
-    // Main application entry point
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(angularPath, 'index.html'));
-  });
-  
+app.get('^', (req, res) => {
+  res.sendFile(path.join(angularPath, 'index.html'));
+});
+
   app.get('cards-auth',(req,res)=>{
     res.sendFile(path.join(__dirname, 'public', 'cards-auth.html'));
   })
@@ -5158,7 +5408,7 @@ app.put('/api/accounting/school-fees/:id/pay', authenticate(['admin', 'accountan
 });
 // في نقطة نهاية دفع رسوم التسجيل (/api/students/:id/pay-registration)
 // Mark registration as paid
-app.post('/api/students/:id/pay-registration', authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
+app.post('/api/students/:id/pay-registration',  async (req, res) => {
   try {
     const { amount, paymentDate, paymentMethod } = req.body;
     const studentId = req.params.id;
@@ -6276,3 +6526,29 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 }); 
 
+
+
+// Get student classes
+app.get('/api/students/:id/classes',  async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    
+    const student = await Student.findById(studentId)
+      .populate({
+        path: 'classes',
+        populate: [
+          { path: 'teacher', model: 'Teacher' },
+          { path: 'schedule.classroom', model: 'Classroom' }
+        ]
+      });
+
+    if (!student) {
+      return res.status(404).json({ error: 'الطالب غير موجود' });
+    }
+
+    res.json(student.classes || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// Add this endpoint with your other student routes
