@@ -21,7 +21,7 @@ require('dotenv').config();
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       credentials: true
     },
-    transports: ['websocket', 'polling'] // Add this line
+    transports: ['websocket', 'polling', 'flashsocket', 'htmlfile'] // Add this line
 
   });
 
@@ -875,7 +875,7 @@ const optionalAuth = (req, res, next) => {
   });
 
   // Users Management (Admin only)
-  app.get('/api/users', authenticate(['admin']), async (req, res) => {
+  app.get('/api/users',  async (req, res) => {
     try {
       const users = await User.find().select('-password');
       res.json(users);
@@ -945,7 +945,7 @@ const validateObjectId = (req, res, next) => {
 
 
   //get all students
-  // app.get('/api/allstudents',/* authenticate(['admin', 'secretary', 'accountant']), */ ()=>{
+  // app.get('/api/allstudents',/* */ ()=>{
   //   try {
   //     const students = Student.find();
   //     res.json(students);
@@ -959,7 +959,7 @@ const validateObjectId = (req, res, next) => {
 // في server.js
 
 // الحصول على جدول دراسة القاعة
-app.get('/api/classrooms/:id/schedule', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+app.get('/api/classrooms/:id/schedule',  async (req, res) => {
   try {
     const classroomId = req.params.id;
     
@@ -1004,7 +1004,7 @@ app.get('/api/classrooms/:id/schedule', authenticate(['admin', 'secretary', 'tea
 });
 
 // الحصول على الحصص الحالية في القاعة
-app.get('/api/classrooms/:id/current-classes', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+app.get('/api/classrooms/:id/current-classes',  async (req, res) => {
   try {
     const classroomId = req.params.id;
     const now = new Date();
@@ -1122,7 +1122,7 @@ app.get('/api/classrooms/:id/current-classes', authenticate(['admin', 'secretary
 
   
   
-  app.get('/api/accounting/budgets', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/budgets',  async (req, res) => {
     try {
       const { status, category } = req.query;
       const query = {};
@@ -1140,7 +1140,7 @@ app.get('/api/classrooms/:id/current-classes', authenticate(['admin', 'secretary
     }
   });
   
-  app.post('/api/accounting/budgets', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.post('/api/accounting/budgets',  async (req, res) => {
     try {
       const { title, amount, category, description, startDate, endDate } = req.body;
       
@@ -1164,7 +1164,7 @@ app.get('/api/classrooms/:id/current-classes', authenticate(['admin', 'secretary
     }
   });
   
-  app.put('/api/accounting/budgets/:id', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.put('/api/accounting/budgets/:id',  async (req, res) => {
     try {
       const budget = await Budget.findByIdAndUpdate(
         req.params.id,
@@ -1183,7 +1183,7 @@ app.get('/api/classrooms/:id/current-classes', authenticate(['admin', 'secretary
   });
   
   // تقرير المصروفات مقابل الميزانية
-  app.get('/api/accounting/budget-report', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/budget-report',  async (req, res) => {
     try {
       const { startDate, endDate } = req.query;
       
@@ -1234,7 +1234,7 @@ app.get('/api/classrooms/:id/current-classes', authenticate(['admin', 'secretary
       res.status(500).json({ error: err.message });
     }
   });
-  app.get('/api/accounting/all-transactions', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/all-transactions',  async (req, res) => {
     try {
       const { type, category, startDate, endDate, status } = req.query;
       const query = {};
@@ -1550,7 +1550,7 @@ app.get('/api/classes/:classId/monthly-attendance/export', async (req, res) => {
 });
 
 // نقطة نهاية جديدة للحصول على غيابات حصة معينة من الحصص الحية
-app.get('/api/live-classes/class/:classId/attendance', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+app.get('/api/live-classes/class/:classId/attendance',  async (req, res) => {
   try {
     const { classId } = req.params;
     const { startDate, endDate } = req.query;
@@ -1690,7 +1690,7 @@ app.get('/api/live-classes/class/:classId/attendance', authenticate(['admin', 's
 
 
 // نقطة نهاية لتصدير البيانات إلى Excel
-app.get('/api/live-classes/class/:classId/attendance/export', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+app.get('/api/live-classes/class/:classId/attendance/export',  async (req, res) => {
   try {
       const { classId } = req.params;
 
@@ -1876,7 +1876,7 @@ app.get('/api/teachers/:id/details',  async (req, res) => {
   }
 });
 
-    app.get('/api/teachers/salaries-summary', authenticate(['admin', 'accountant']), async (req, res) => {
+    app.get('/api/teachers/salaries-summary',  async (req, res) => {
     try {
       const { month } = req.query;
       const query = {};
@@ -1963,7 +1963,7 @@ app.get('/api/teachers/:id/payments', authenticate(['admin', 'accountant', 'teac
 });
 
 // endpoint جديد لدفع راتب الأستاذ
-app.post('/api/teachers/:id/pay-salary', authenticate(['admin', 'accountant']), async (req, res) => {
+app.post('/api/teachers/:id/pay-salary',  async (req, res) => {
   try {
     const { month, paymentMethod, paymentDate } = req.body;
     const teacherId = req.params.id;
@@ -2106,7 +2106,7 @@ app.post('/api/teachers/pay-all-salaries',  async (req, res) => {
 });
 
 // إضافة نقطة نهاية جديدة لدفع عمولة فردية
-app.post('/api/accounting/teacher-commissions/pay-single', authenticate(['admin', 'accountant']), async (req, res) => {
+app.post('/api/accounting/teacher-commissions/pay-single',  async (req, res) => {
   try {
       const { commissionId, paymentMethod, paymentDate } = req.body;
       
@@ -2164,7 +2164,7 @@ app.post('/api/accounting/teacher-commissions/pay-single', authenticate(['admin'
 });
 
 // تحسين نقطة نهاية التقارير
-app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant']), async (req, res) => {
+app.get('/api/accounting/reports/financial',  async (req, res) => {
   try {
       const { year, month } = req.query;
       const matchStage = {};
@@ -2356,7 +2356,7 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
     }
   });
 
-  app.post('/api/classrooms', authenticate(['admin']), async (req, res) => {
+  app.post('/api/classrooms',  async (req, res) => {
     try {
       const classroom = new Classroom(req.body);
       await classroom.save();
@@ -2367,7 +2367,7 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
   });
 
   // Classes
-  app.get('/api/classes', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  app.get('/api/classes',  async (req, res) => {
     try {
       const { academicYear, subject, teacher } = req.query;
       const query = {};
@@ -2387,7 +2387,7 @@ app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant'
   });
 
 // In your server.js, add logging to the /api/classes POST endpoint:
-app.post('/api/classes', authenticate(['admin', 'secretary']), async (req, res) => {
+app.post('/api/classes',  async (req, res) => {
   try {
     console.log('Received class creation request:', req.body); // Add this line
     
@@ -2435,7 +2435,7 @@ app.post('/api/classes', authenticate(['admin', 'secretary']), async (req, res) 
     res.status(400).json({ error: errorMessage });
   }
 });
-  app.get('/api/classes/:id', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  app.get('/api/classes/:id',  async (req, res) => {
     try {
       const classObj = await Class.findById(req.params.id)
         .populate('teacher')
@@ -2448,7 +2448,7 @@ app.post('/api/classes', authenticate(['admin', 'secretary']), async (req, res) 
     }
   });
 
-  app.put('/api/classes/:id', authenticate(['admin', 'secretary']), async (req, res) => {
+  app.put('/api/classes/:id',  async (req, res) => {
     try {
       const classObj = await Class.findByIdAndUpdate(
         req.params.id,
@@ -2465,7 +2465,7 @@ app.post('/api/classes', authenticate(['admin', 'secretary']), async (req, res) 
     }
   });
 
-  app.delete('/api/classes/:id', authenticate(['admin']), async (req, res) => {
+  app.delete('/api/classes/:id',  async (req, res) => {
     try {
       // Remove class from students first
       await Student.updateMany(
@@ -2488,7 +2488,7 @@ app.post('/api/classes', authenticate(['admin', 'secretary']), async (req, res) 
 
   // Enroll Student in Class
   // Enroll Student in Class
-  app.post('/api/classes/:classId/enroll/:studentId', authenticate(['admin', 'secretary']), async (req, res) => {
+  app.post('/api/classes/:classId/enroll/:studentId',  async (req, res) => {
     try {
       // 1. Check if class and student exist
       const classObj = await Class.findById(req.params.classId);
@@ -2591,7 +2591,7 @@ app.post('/api/classes', authenticate(['admin', 'secretary']), async (req, res) 
   });
 
   // Unenroll Student from Class
-  app.delete('/api/classes/:classId/unenroll/:studentId', authenticate(['admin', 'secretary']), async (req, res) => {
+  app.delete('/api/classes/:classId/unenroll/:studentId',  async (req, res) => {
     try {
       // Remove student from class
       await Class.findByIdAndUpdate(
@@ -2768,7 +2768,7 @@ app.post('/api/students/:studentId/enroll-multiple',  async (req, res) => {
 });
 
   // Attendance
-  app.get('/api/attendance', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  app.get('/api/attendance',  async (req, res) => {
     try {
       const { class: classId, student, date } = req.query;
       const query = {};
@@ -2794,7 +2794,7 @@ app.post('/api/students/:studentId/enroll-multiple',  async (req, res) => {
 
 
   // تقرير الغيابات الشهرية لحصة معينة
-app.get('/api/live-classes/:classId/monthly-attendance', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+app.get('/api/live-classes/:classId/monthly-attendance',  async (req, res) => {
   try {
     const { classId } = req.params;
     const { month, year } = req.query; // month: 1-12, year: YYYY
@@ -2881,7 +2881,7 @@ app.get('/api/live-classes/:classId/monthly-attendance', authenticate(['admin', 
   }
 });
 
-  app.post('/api/attendance', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  app.post('/api/attendance',  async (req, res) => {
     try {
       const attendance = new Attendance({
         ...req.body,
@@ -2996,7 +2996,7 @@ app.get('/api/students/:studentId/monthly-attendance', async (req, res) => {
 });
 
   // Cards
-  app.get('/api/cards', authenticate(['admin', 'secretary']), async (req, res) => {
+  app.get('/api/cards',  async (req, res) => {
     try {
       const cards = await Card.find().populate('student');
       res.json(cards);
@@ -3005,7 +3005,7 @@ app.get('/api/students/:studentId/monthly-attendance', async (req, res) => {
     }
   });
 
-  app.post('/api/cards', authenticate(['admin', 'secretary']), async (req, res) => {
+  app.post('/api/cards',  async (req, res) => {
     try {
       const { uid, student } = req.body;
 
@@ -3057,7 +3057,7 @@ app.get('/api/students/:studentId/monthly-attendance', async (req, res) => {
     }
   });
 
-  app.delete('/api/cards/:id', authenticate(['admin']), async (req, res) => {
+  app.delete('/api/cards/:id',  async (req, res) => {
     try {
       await Card.findByIdAndDelete(req.params.id);
       res.json({ message: 'تم حذف البطاقة بنجاح' });
@@ -3095,7 +3095,7 @@ app.get('/api/students/:studentId/monthly-attendance', async (req, res) => {
 
 
   // في ملف الخادم (server.js أو app.js)
-app.put('/api/payments/:id/cancel', authenticate(['admin', 'accountant']), async (req, res) => {
+app.put('/api/payments/:id/cancel',  async (req, res) => {
   try {
       const payment = await Payment.findById(req.params.id);
       
@@ -3138,7 +3138,7 @@ app.put('/api/payments/:id/cancel', authenticate(['admin', 'accountant']), async
 });
 
 // Payments - Delete a payment
-app.delete('/api/payments/:id', authenticate(['admin', 'accountant']), async (req, res) => {
+app.delete('/api/payments/:id',  async (req, res) => {
   try {
     const paymentId = req.params.id;
 
@@ -3188,7 +3188,7 @@ app.get('/api/payments/count', async (req, res) => {
 });
 // Get multiple payments by IDs (for printing multiple receipts)
 // Get multiple payments by IDs (for printing multiple receipts)
-app.post('/api/payments/bulk', authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
+app.post('/api/payments/bulk', async (req, res) => {
   try {
     const { paymentIds } = req.body;
     
@@ -3218,7 +3218,7 @@ app.post('/api/payments/bulk', authenticate(['admin', 'secretary', 'accountant']
   // Enhanced payment registration with teacher share calculation
   // تحديث مسار تسجيل الدفع
 // Register Payment - FIXED VERSION - Update to return populated data
-app.put('/api/payments/:id/pay', authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
+app.put('/api/payments/:id/pay', async (req, res) => {
   try {
     const payment = await Payment.findById(req.params.id)
       .populate('student')
@@ -3310,7 +3310,7 @@ app.put('/api/payments/:id/pay', authenticate(['admin', 'secretary', 'accountant
 });
 
 // في server.js - تحديث endpoint المدفوعات
-app.get('/api/payments', authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
+app.get('/api/payments', async (req, res) => {
   try {
     const { student, class: classId, month, status } = req.query;
     const query = {};
@@ -3339,7 +3339,7 @@ app.get('/api/payments', authenticate(['admin', 'secretary', 'accountant']), asy
 });
   // Generate Invoice
 // Generate Invoice - Update to populate class data
-app.get('/api/payments/:id', authenticate(['admin', 'secretary', 'accountant']), async (req, res) => {
+app.get('/api/payments/:id', async (req, res) => {
   try {
     const payment = await Payment.findById(req.params.id)
       .populate('student')
@@ -3383,7 +3383,7 @@ app.put('/api/payments/:id/amount', async (req, res) => {
 });
 
   // Messages
-  app.get('/api/messages', authenticate(['admin', 'secretary']), async (req, res) => {
+  app.get('/api/messages',  async (req, res) => {
     try {
       const { messageType, class: classId, startDate, endDate } = req.query;
       const query = {};
@@ -3407,7 +3407,7 @@ app.put('/api/payments/:id/amount', async (req, res) => {
     }
   });
 
-  app.post('/api/messages', authenticate(['admin', 'secretary']), async (req, res) => {
+  app.post('/api/messages',  async (req, res) => {
     try {
       const { recipients, content, messageType, class: classId } = req.body;
 
@@ -3508,7 +3508,7 @@ app.put('/api/payments/:id/amount', async (req, res) => {
   });
 
   // Financial Transactions
-  app.get('/api/transactions', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/transactions',  async (req, res) => {
     try {
       const { type, category, startDate, endDate } = req.query;
       const query = {};
@@ -3531,7 +3531,7 @@ app.put('/api/payments/:id/amount', async (req, res) => {
   });
 
   // Financial Reports
-  app.get('/api/reports/financial', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/reports/financial',  async (req, res) => {
     try {
       const { year } = req.query;
       const matchStage = {};
@@ -3599,7 +3599,7 @@ app.put('/api/payments/:id/amount', async (req, res) => {
 
 
   // Live Classes Routes
-  app.get('/api/live-classes', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  app.get('/api/live-classes',  async (req, res) => {
     try {
       const { status, date, class: classId } = req.query;
       const query = {};
@@ -3626,7 +3626,7 @@ app.put('/api/payments/:id/amount', async (req, res) => {
     }
   });
 
-  app.post('/api/live-classes', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  app.post('/api/live-classes',  async (req, res) => {
     try {
       const liveClass = new LiveClass({
         ...req.body,
@@ -3647,7 +3647,7 @@ app.put('/api/payments/:id/amount', async (req, res) => {
     }
   });
 
-  app.put('/api/live-classes/:id', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  app.put('/api/live-classes/:id',  async (req, res) => {
     try {
       const liveClass = await LiveClass.findByIdAndUpdate(
         req.params.id,
@@ -3665,7 +3665,7 @@ app.put('/api/payments/:id/amount', async (req, res) => {
     }
   });
 
-  app.get('/api/live-classes/:id', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  app.get('/api/live-classes/:id',  async (req, res) => {
     try {
       const liveClass = await LiveClass.findById(req.params.id)
         .populate('class')
@@ -3684,7 +3684,7 @@ app.put('/api/payments/:id/amount', async (req, res) => {
 
   // Auto Mark Absent , student hows not attendance  on lesson 
 
-  app.post('/api/live-classes/:id/auto-mark-absent', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  app.post('/api/live-classes/:id/auto-mark-absent',  async (req, res) => {
     try {
       const liveClassId = req.params.id;
       
@@ -3824,7 +3824,7 @@ app.put('/api/payments/:id/amount', async (req, res) => {
   }
 
   // Enhanced attendance endpoint
-  app.post('/api/live-classes/:id/attendance', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  app.post('/api/live-classes/:id/attendance',  async (req, res) => {
     try {
       const { studentId, status, method } = req.body; // Added method parameter
       
@@ -3890,7 +3890,7 @@ app.put('/api/payments/:id/amount', async (req, res) => {
       res.status(500).json({ error: err.message });
     }
   });
-  app.get('/api/live-classes/:classId/report', authenticate(['admin', 'secretary', 'teacher']), async (req, res) => {
+  app.get('/api/live-classes/:classId/report',  async (req, res) => {
     try {
       const { fromDate, toDate } = req.query;
       
@@ -4039,7 +4039,7 @@ app.get('/api/payments/student/:studentId',  async (req, res) => {
   });
 
   // Get Registration Requests (Admin only)
-  app.get('/api/registration-requests', authenticate(['admin']), async (req, res) => {
+  app.get('/api/registration-requests',  async (req, res) => {
     try {
       const { status } = req.query;
       const query = { status: status || 'pending' };
@@ -4054,7 +4054,7 @@ app.get('/api/payments/student/:studentId',  async (req, res) => {
   });
 
   // Approve Student
-  app.put('/api/admin/approve-student/:id', authenticate(['admin']), async (req, res) => {
+  app.put('/api/admin/approve-student/:id',  async (req, res) => {
     try {
       // Generate official student ID
       const year = new Date().getFullYear().toString().slice(-2);
@@ -4355,7 +4355,7 @@ app.get('/api/payments/student/:studentId',  async (req, res) => {
   });
 
   // Get Student Data
-  app.get('/api/student/data', authenticate(['student', 'secretary', 'admin','accountant']), async (req, res) => {
+  app.get('/api/student/data', async (req, res) => {
     try {
       const student = await Student.findOne({ studentId: req.user.studentId })
         .populate({
@@ -4606,7 +4606,7 @@ app.get('^', (req, res) => {
   });
 
   // إضافة نقطة النهاية المطلوبة
-app.get('/api/accounting/teacher-commissions/:id', authenticate(['admin', 'accountant']), async (req, res) => {
+app.get('/api/accounting/teacher-commissions/:id',  async (req, res) => {
   try {
     const commission = await TeacherCommission.findById(req.params.id)
       .populate('teacher')
@@ -4625,7 +4625,7 @@ app.get('/api/accounting/teacher-commissions/:id', authenticate(['admin', 'accou
 });
 
 // إضافة نقطة نهاية لدفع عمولة محددة
-app.post('/api/accounting/teacher-commissions/:id/pay', authenticate(['admin', 'accountant']), async (req, res) => {
+app.post('/api/accounting/teacher-commissions/:id/pay',  async (req, res) => {
   try {
     const { paymentMethod, paymentDate } = req.body;
     
@@ -4734,13 +4734,13 @@ app.post('/api/accounting/teacher-commissions/:id/pay', authenticate(['admin', '
   ];
 
   // Get expense categories
-  app.get('/api/accounting/expense-categories', authenticate(['admin', 'accountant']), (req, res) => {
+  app.get('/api/accounting/expense-categories',  (req, res) => {
   res.json(EXPENSE_CATEGORIES);
   });
 
 
 
-  app.post('/api/accounting/budget', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.post('/api/accounting/budget',  async (req, res) => {
     try {
       const { type, amount, description } = req.body;
       
@@ -4762,7 +4762,7 @@ app.post('/api/accounting/teacher-commissions/:id/pay', authenticate(['admin', '
     }
   });
 
-  app.get('/api/accounting/balance', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/balance',  async (req, res) => {
     try {
       const balance = await calculateCurrentBalance();
       res.json({ balance });
@@ -4772,7 +4772,7 @@ app.post('/api/accounting/teacher-commissions/:id/pay', authenticate(['admin', '
   });
 
   // Add expense with validation
-  app.post('/api/accounting/expenses', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.post('/api/accounting/expenses',  async (req, res) => {
     try {
       const { description, amount, category, type, recipient, paymentMethod } = req.body;
       
@@ -4798,7 +4798,7 @@ app.post('/api/accounting/teacher-commissions/:id/pay', authenticate(['admin', '
     }
   });
 
-  app.post('/api/accounting/teacher-commissions/pay', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.post('/api/accounting/teacher-commissions/pay',  async (req, res) => {
     try {
       const { commissionId, paymentMethod, paymentDate } = req.body;
       
@@ -4855,7 +4855,7 @@ app.post('/api/accounting/teacher-commissions/:id/pay', authenticate(['admin', '
     }
   });
 // نقطة نهاية جديدة للحصول على العمولات مجمعة حسب الحصة
-app.get('/api/accounting/teacher-commissions-by-class', authenticate(['admin', 'accountant']), async (req, res) => {
+app.get('/api/accounting/teacher-commissions-by-class',  async (req, res) => {
   try {
       const { teacher, month, status, class: classId } = req.query;
       const matchStage = {};
@@ -4944,7 +4944,7 @@ app.get('/api/accounting/teacher-commissions-by-class', authenticate(['admin', '
 });
 
 // نقطة نهاية لدفع عمولة حصة محددة
-app.post('/api/accounting/teacher-commissions/pay-by-class', authenticate(['admin', 'accountant']), async (req, res) => {
+app.post('/api/accounting/teacher-commissions/pay-by-class',  async (req, res) => {
   try {
       const { teacherId, classId, month, paymentMethod, paymentDate, percentage } = req.body;
       
@@ -5045,7 +5045,7 @@ app.post('/api/accounting/teacher-commissions/pay-by-class', authenticate(['admi
       res.status(500).json({ error: err.message });
     }
   });
-  app.get('/api/accounting/reports/financial', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/reports/financial',  async (req, res) => {
     try {
       const { startDate, endDate, type } = req.query;
       const matchStage = {};
@@ -5168,7 +5168,7 @@ app.post('/api/accounting/teacher-commissions/pay-by-class', authenticate(['admi
     return dates.length > 0 ? new Date(Math.min(...dates)) : new Date();
   }
   // Monthly expense report
-  app.get('/api/accounting/expense-report', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/expense-report',  async (req, res) => {
   try {
     const { year, month } = req.query;
     
@@ -5206,7 +5206,7 @@ app.post('/api/accounting/teacher-commissions/pay-by-class', authenticate(['admi
   });
 
   // Financial dashboard data
-  app.get('/api/accounting/dashboard', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/dashboard',  async (req, res) => {
   try {
     const { year } = req.query;
     const currentYear = year || new Date().getFullYear();
@@ -5299,7 +5299,7 @@ app.post('/api/accounting/teacher-commissions/pay-by-class', authenticate(['admi
   // ==============================================
 
   // School Fees (Registration Fees)
-  app.get('/api/accounting/school-fees', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/school-fees',  async (req, res) => {
   try {
     const { status, student } = req.query;
     const query = {};
@@ -5318,7 +5318,7 @@ app.post('/api/accounting/teacher-commissions/pay-by-class', authenticate(['admi
   }
   });
 
-  app.post('/api/accounting/school-fees', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.post('/api/accounting/school-fees',  async (req, res) => {
   try {
     const { studentId } = req.body;
     
@@ -5349,7 +5349,7 @@ app.post('/api/accounting/teacher-commissions/pay-by-class', authenticate(['admi
   });
 
 // في نقطة نهاية دفع رسوم التسجيل (/api/accounting/school-fees/:id/pay)
-app.put('/api/accounting/school-fees/:id/pay', authenticate(['admin', 'accountant']), async (req, res) => {
+app.put('/api/accounting/school-fees/:id/pay',  async (req, res) => {
   try {
     const fee = await SchoolFee.findById(req.params.id).populate('student');
     if (!fee) {
@@ -5461,7 +5461,7 @@ app.post('/api/students/:id/pay-registration',  async (req, res) => {
 
 
   // Teacher Payments (70% of class fees)
-  app.get('/api/accounting/teacher-payments', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/teacher-payments',  async (req, res) => {
   try {
     const { teacher, class: classId, student, month, status } = req.query;
     const query = {};
@@ -5485,7 +5485,7 @@ app.post('/api/students/:id/pay-registration',  async (req, res) => {
   }
   });
 
-  app.post('/api/accounting/teacher-payments', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.post('/api/accounting/teacher-payments',  async (req, res) => {
   try {
     const { teacherId, classId, studentId, month } = req.body;
     
@@ -5531,7 +5531,7 @@ app.post('/api/students/:id/pay-registration',  async (req, res) => {
   }
   });
 
-  app.put('/api/accounting/teacher-payments/:id/pay', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.put('/api/accounting/teacher-payments/:id/pay',  async (req, res) => {
   try {
     const payment = await TeacherPayment.findById(req.params.id)
       .populate('teacher')
@@ -5593,7 +5593,7 @@ app.post('/api/students/:id/pay-registration',  async (req, res) => {
   });
 
   // Staff Salaries
-  app.get('/api/accounting/staff-salaries', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/staff-salaries',  async (req, res) => {
   try {
     const { employee, month, status } = req.query;
     const query = {};
@@ -5613,7 +5613,7 @@ app.post('/api/students/:id/pay-registration',  async (req, res) => {
   }
   });
 
-  app.post('/api/accounting/staff-salaries', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.post('/api/accounting/staff-salaries',  async (req, res) => {
   try {
     const { employeeId, month, amount } = req.body;
     
@@ -5647,7 +5647,7 @@ app.post('/api/students/:id/pay-registration',  async (req, res) => {
   }
   });
 
-  app.put('/api/accounting/staff-salaries/:id/pay', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.put('/api/accounting/staff-salaries/:id/pay',  async (req, res) => {
   try {
     const salary = await StaffSalary.findById(req.params.id)
       .populate('employee');
@@ -5707,7 +5707,7 @@ app.post('/api/students/:id/pay-registration',  async (req, res) => {
   });
 
   // Expenses
-  app.get('/api/accounting/expenses', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/expenses',  async (req, res) => {
     try {
         const { category, startDate, endDate, type } = req.query;
         const query = {};
@@ -5730,7 +5730,7 @@ app.post('/api/students/:id/pay-registration',  async (req, res) => {
     }
 });
 // إضافة نقطة نهاية جديدة في الخادم
-app.get('/api/accounting/summary', authenticate(['admin', 'accountant']), async (req, res) => {
+app.get('/api/accounting/summary',  async (req, res) => {
   try {
       // حساب الإيرادات (مدفوعات الطلاب)
       const incomeResult = await Payment.aggregate([
@@ -5759,7 +5759,7 @@ app.get('/api/accounting/summary', authenticate(['admin', 'accountant']), async 
 
 // دالة محسنة باستخدام النقطة الجديدة
 
-  app.post('/api/accounting/expenses', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.post('/api/accounting/expenses',  async (req, res) => {
   try {
     const { description, amount, category, paymentMethod } = req.body;
     
@@ -5797,7 +5797,7 @@ app.get('/api/accounting/summary', authenticate(['admin', 'accountant']), async 
   });
 
   // Invoices
-  app.get('/api/accounting/invoices', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/invoices',  async (req, res) => {
   try {
     const { type, status, startDate, endDate } = req.query;
     const query = {};
@@ -5820,7 +5820,7 @@ app.get('/api/accounting/summary', authenticate(['admin', 'accountant']), async 
   }
   });
 
-  app.get('/api/accounting/invoices/:id', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/invoices/:id',  async (req, res) => {
   try {
     const invoice = await Invoice.findById(req.params.id)
       .populate('recordedBy');
@@ -5864,7 +5864,7 @@ app.get('/api/accounting/summary', authenticate(['admin', 'accountant']), async 
   }
   });
   // Generate invoice for any payment type
-  app.get('/api/accounting/invoices/generate/:type/:id', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/invoices/generate/:type/:id',  async (req, res) => {
   try {
     const { type, id } = req.params;
     
@@ -5957,7 +5957,7 @@ app.get('/api/accounting/summary', authenticate(['admin', 'accountant']), async 
   }
   });
   // Detailed financial report with filtering
-  app.get('/api/accounting/reports/detailed', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/reports/detailed',  async (req, res) => {
   try {
     const { startDate, endDate, category, type } = req.query;
     const matchStage = {};
@@ -6015,7 +6015,7 @@ app.get('/api/accounting/summary', authenticate(['admin', 'accountant']), async 
   }
   });
   // Financial Reports
-  app.get('/api/accounting/reports/summary', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/reports/summary',  async (req, res) => {
   try {
     const { year, month } = req.query;
     const matchStage = {};
@@ -6081,7 +6081,7 @@ app.get('/api/accounting/summary', authenticate(['admin', 'accountant']), async 
   });
 
   // Teacher Payment Reports
-  app.get('/api/accounting/reports/teacher-payments', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/reports/teacher-payments',  async (req, res) => {
   try {
     const { teacherId, year } = req.query;
     const matchStage = { teacher: mongoose.Types.ObjectId(teacherId) };
@@ -6109,7 +6109,7 @@ app.get('/api/accounting/summary', authenticate(['admin', 'accountant']), async 
   });
 
   // Student Payment Reports
-  app.get('/api/accounting/reports/student-payments', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.get('/api/accounting/reports/student-payments',  async (req, res) => {
   try {
     const { studentId, year } = req.query;
     const matchStage = { student: mongoose.Types.ObjectId(studentId) };
@@ -6334,7 +6334,7 @@ app.get('/api/accounting/daily-income',  async (req, res) => {
     });
   }
 });
-app.get('/api/accounting/weekly-income', authenticate(['admin', 'accountant']), async (req, res) => {
+app.get('/api/accounting/weekly-income',  async (req, res) => {
   try {
       const today = new Date();
       const startOfWeek = new Date(today);
@@ -6370,7 +6370,7 @@ app.get('/api/accounting/weekly-income', authenticate(['admin', 'accountant']), 
 });
 
 // دالة إضافية للحصول على إحصائيات الدخل للشهر الحالي
-app.get('/api/accounting/monthly-income', authenticate(['admin', 'accountant']), async (req, res) => {
+app.get('/api/accounting/monthly-income',  async (req, res) => {
   try {
       const today = new Date();
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
