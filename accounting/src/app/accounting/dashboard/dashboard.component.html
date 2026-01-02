@@ -1,0 +1,135 @@
+<div class="dashboard">
+    <!-- إحصائيات سريعة -->
+    <div class="row mb-4">
+      <div class="col-md-3">
+        <div class="stat-card bg-primary">
+          <div class="stat-icon">
+            <i class="fas fa-money-bill-wave"></i>
+          </div>
+          <div class="stat-info">
+            <h4>{{ dailyIncome | number }} د.ج</h4>
+            <p>دخل اليوم</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-md-3">
+        <div class="stat-card bg-success">
+          <div class="stat-icon">
+            <i class="fas fa-chart-line"></i>
+          </div>
+          <div class="stat-info">
+            <h4>{{ monthlyIncome | number }} د.ج</h4>
+            <p>الدخل الشهري</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-md-3">
+        <div class="stat-card bg-info">
+          <div class="stat-icon">
+            <i class="fas fa-wallet"></i>
+          </div>
+          <div class="stat-info">
+            <h4>{{ totalBalance | number }} د.ج</h4>
+            <p>الرصيد الحالي</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-md-3">
+        <div class="stat-card bg-warning">
+          <div class="stat-icon">
+            <i class="fas fa-clock"></i>
+          </div>
+          <div class="stat-info">
+            <h4>{{ summaryData.payments?.count || 0 }}</h4>
+            <p>مدفوعات اليوم</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- الرسوم البيانية -->
+    <div class="row mb-4">
+      <div class="col-md-8">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="card-title mb-0">الدخل الشهري</h5>
+          </div>
+          <div class="card-body">
+            <canvas id="incomeChart"></canvas>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="card-title mb-0">توزيع المصروفات</h5>
+          </div>
+          <div class="card-body">
+            <canvas id="expenseChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- المعاملات الأخيرة -->
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">أحدث المعاملات</h5>
+            <a routerLink="/accounting/transactions" class="btn btn-sm btn-primary">
+              عرض الكل
+            </a>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th>التاريخ</th>
+                    <th>الوصف</th>
+                    <th>النوع</th>
+                    <th>المبلغ</th>
+                    <th>التصنيف</th>
+                    <th>المسجل</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let transaction of recentTransactions">
+                    <td>{{ transaction.date | date:'short' }}</td>
+                    <td>{{ transaction.description }}</td>
+                    <td>
+                      <span class="badge" [ngClass]="{
+                        'bg-success': transaction.type === 'income',
+                        'bg-danger': transaction.type === 'expense'
+                      }">
+                        <i class="fas" [ngClass]="getTransactionTypeIcon(transaction.type)"></i>
+                        {{ transaction.type === 'income' ? 'إيراد' : 'مصروف' }}
+                      </span>
+                    </td>
+                    <td class="fw-bold" [ngClass]="{
+                      'text-success': transaction.type === 'income',
+                      'text-danger': transaction.type === 'expense'
+                    }">
+                      {{ formatCurrency(transaction.amount) }}
+                    </td>
+                    <td>{{ transaction.category }}</td>
+                    <td>{{ transaction.recordedBy?.fullName || 'نظام' }}</td>
+                  </tr>
+                  <tr *ngIf="recentTransactions.length === 0">
+                    <td colspan="6" class="text-center text-muted py-4">
+                      لا توجد معاملات
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>

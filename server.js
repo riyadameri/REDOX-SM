@@ -212,7 +212,7 @@ app.options('*', cors(corsOptions));
     commissionRecorded: { type: Boolean, default: false },
     commissionId: { type: mongoose.Schema.Types.ObjectId, ref: 'TeacherCommission' }
   });
-
+  
   const messageSchema = new mongoose.Schema({
     sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     recipients: [{
@@ -342,11 +342,10 @@ liveClassSchema.pre('save', function(next) {
       enum: ['salary', 'rent', 'utilities', 'supplies', 'maintenance', 'marketing', 'other'],
       required: true 
     },
-    type: { type: String, enum: ['teacher_payment', 'staff_salary', 'operational'], required: true },
-    recipient: {
-      type: { type: String, enum: ['teacher', 'staff', 'other'] },
-      id: mongoose.Schema.Types.ObjectId,
-      name: String
+    type: { 
+      type: String, 
+      enum: ['teacher_payment', 'staff_salary', 'operational'],
+      default: 'operational' // Add default value
     },
     date: { type: Date, default: Date.now },
     paymentMethod: { type: String, enum: ['cash', 'bank', 'online'], default: 'cash' },
@@ -358,18 +357,31 @@ liveClassSchema.pre('save', function(next) {
   // Teacher Commission Schema
   const teacherCommissionSchema = new mongoose.Schema({
     teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher', required: true },
-    student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
+    student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: false }, // جعلها غير مطلوبة للحصص الشاملة
     class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
     month: { type: String, required: true },
     amount: { type: Number, required: true },
     percentage: { type: Number, required: true },
+    type: { 
+      type: String, 
+      enum: ['individual', 'class'], 
+      default: 'individual' 
+    },
+    round: String,
     status: { type: String, enum: ['pending', 'paid'], default: 'pending' },
     paymentDate: { type: Date, default: null },
     paymentMethod: { type: String, enum: ['cash', 'bank', 'online'], default: 'cash' },
     receiptNumber: String,
-    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    studentDetails: [{
+      student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' },
+      attendancesCount: Number,
+      teacherShare: Number,
+      includedInCommission: { type: Boolean, default: true }
+    }],
+    notes: String
   });
-
+  
   // Create models
   const Budget = mongoose.model('Budget', budgetSchema);
   const TeacherCommission = mongoose.model('TeacherCommission', teacherCommissionSchema);
@@ -4518,18 +4530,75 @@ app.get('^', (req, res) => {
 
   // Accounting Login Route
   // إحصائيات اليوم
-  app.get('/api/accounting/today-stats', authenticate(['admin', 'accountant', 'secretary']), async (req, res) => {
+  app.get('/api/accounting/today-stats', async (req, res) => {
     try {
+      // Get today's date in Algeria timezone (UTC+1)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      
+      // Get tomorrow's date
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      // مدفوعات اليوم
+      console.log('Today stats query - Date range:', {
+        today: today,
+        tomorrow: tomorrow,
+        todayISO: today.toISOString(),
+        tomorrowISO: tomorrow.toISOString()
+      });
+  
+      // Debug: Check what dates exist in the database
+      const testPayments = await Payment.find({
+        status: 'paid',
+        paymentDate: { $ne: null }
+      })
+      .sort({ paymentDate: -1 })
+      .limit(5)
+      .select('paymentDate amount student month');
+      
+      console.log('Sample payment dates:', testPayments.map(p => ({
+        paymentDate: p.paymentDate,
+        amount: p.amount,
+        month: p.month
+      })));
+  
+      // OPTION 1: Using paymentDate field (for payments with recorded payment date)
       const todayPayments = await Payment.aggregate([
         {
           $match: {
-            paymentDate: {
+            $or: [
+              {
+                paymentDate: {
+                  $gte: today,
+                  $lt: tomorrow
+                }
+              },
+              // Also check if payment was created today (for payments without paymentDate)
+              {
+                createdAt: {
+                  $gte: today,
+                  $lt: tomorrow
+                },
+                paymentDate: null
+              }
+            ],
+            status: 'paid'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' },
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+  
+      // OPTION 2: Alternative approach using created date
+      const todayPaymentsAlt = await Payment.aggregate([
+        {
+          $match: {
+            createdAt: {
               $gte: today,
               $lt: tomorrow
             },
@@ -4544,15 +4613,26 @@ app.get('^', (req, res) => {
           }
         }
       ]);
-      
-      // مصروفات اليوم
+  
+      // مصروفات اليوم - check both date and createdAt fields
       const todayExpenses = await Expense.aggregate([
         {
           $match: {
-            date: {
-              $gte: today,
-              $lt: tomorrow
-            },
+            $or: [
+              {
+                date: {
+                  $gte: today,
+                  $lt: tomorrow
+                }
+              },
+              {
+                createdAt: {
+                  $gte: today,
+                  $lt: tomorrow
+                },
+                date: null
+              }
+            ],
             status: 'paid'
           }
         },
@@ -4564,15 +4644,26 @@ app.get('^', (req, res) => {
           }
         }
       ]);
-      
+  
       // عمولات اليوم
       const todayCommissions = await TeacherCommission.aggregate([
         {
           $match: {
-            paymentDate: {
-              $gte: today,
-              $lt: tomorrow
-            },
+            $or: [
+              {
+                paymentDate: {
+                  $gte: today,
+                  $lt: tomorrow
+                }
+              },
+              {
+                createdAt: {
+                  $gte: today,
+                  $lt: tomorrow
+                },
+                paymentDate: null
+              }
+            ],
             status: 'paid'
           }
         },
@@ -4584,12 +4675,91 @@ app.get('^', (req, res) => {
           }
         }
       ]);
-      
-      res.json({
+  
+      // Also check financial transactions for today
+      const todayTransactions = await FinancialTransaction.aggregate([
+        {
+          $match: {
+            $or: [
+              {
+                date: {
+                  $gte: today,
+                  $lt: tomorrow
+                }
+              },
+              {
+                createdAt: {
+                  $gte: today,
+                  $lt: tomorrow
+                },
+                date: null
+              }
+            ]
+          }
+        },
+        {
+          $group: {
+            _id: '$type',
+            total: { $sum: '$amount' },
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+  
+      // Count all documents created today for debugging
+      const todayCounts = {
+        payments: await Payment.countDocuments({
+          $or: [
+            { paymentDate: { $gte: today, $lt: tomorrow } },
+            { createdAt: { $gte: today, $lt: tomorrow } }
+          ]
+        }),
+        expenses: await Expense.countDocuments({
+          $or: [
+            { date: { $gte: today, $lt: tomorrow } },
+            { createdAt: { $gte: today, $lt: tomorrow } }
+          ]
+        }),
+        commissions: await TeacherCommission.countDocuments({
+          $or: [
+            { paymentDate: { $gte: today, $lt: tomorrow } },
+            { createdAt: { $gte: today, $lt: tomorrow } }
+          ]
+        }),
+        transactions: await FinancialTransaction.countDocuments({
+          $or: [
+            { date: { $gte: today, $lt: tomorrow } },
+            { createdAt: { $gte: today, $lt: tomorrow } }
+          ]
+        })
+      };
+  
+      // Get detailed payment data for today
+      const detailedPayments = await Payment.find({
+        $or: [
+          { paymentDate: { $gte: today, $lt: tomorrow } },
+          { createdAt: { $gte: today, $lt: tomorrow } }
+        ],
+        status: 'paid'
+      })
+      .populate('student', 'name')
+      .populate('class', 'name')
+      .limit(10)
+      .select('amount paymentDate createdAt student class month');
+  
+      const response = {
         date: today,
+        dateRange: {
+          start: today,
+          end: tomorrow
+        },
         payments: {
           total: todayPayments[0]?.total || 0,
-          count: todayPayments[0]?.count || 0
+          count: todayPayments[0]?.count || 0,
+          alternative: {
+            total: todayPaymentsAlt[0]?.total || 0,
+            count: todayPaymentsAlt[0]?.count || 0
+          }
         },
         expenses: {
           total: todayExpenses[0]?.total || 0,
@@ -4598,13 +4768,36 @@ app.get('^', (req, res) => {
         commissions: {
           total: todayCommissions[0]?.total || 0,
           count: todayCommissions[0]?.count || 0
+        },
+        transactions: todayTransactions,
+        debug: {
+          todayCounts,
+          samplePayments: detailedPayments.map(p => ({
+            amount: p.amount,
+            paymentDate: p.paymentDate,
+            createdAt: p.createdAt,
+            student: p.student?.name,
+            class: p.class?.name,
+            month: p.month
+          })),
+          // Get first payment ever to see date format
+          firstPayment: await Payment.findOne({ status: 'paid' })
+            .sort({ paymentDate: 1 })
+            .select('paymentDate amount month')
         }
-      });
+      };
+  
+      console.log('Today stats response:', JSON.stringify(response, null, 2));
+  
+      res.json(response);
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      console.error('Error in today-stats:', err);
+      res.status(500).json({ 
+        error: err.message,
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+      });
     }
   });
-
   // إضافة نقطة النهاية المطلوبة
 app.get('/api/accounting/teacher-commissions/:id',  async (req, res) => {
   try {
@@ -4772,31 +4965,1068 @@ app.post('/api/accounting/teacher-commissions/:id/pay',  async (req, res) => {
   });
 
   // Add expense with validation
-  app.post('/api/accounting/expenses',  async (req, res) => {
+  app.post('/api/accounting/expenses', authenticate(['admin', 'accountant']), async (req, res) => {
     try {
-      const { description, amount, category, type, recipient, paymentMethod } = req.body;
+      console.log('=== ADD EXPENSE REQUEST ===');
+      console.log('Headers:', req.headers);
+      console.log('User:', req.user);
+      console.log('Body:', req.body);
       
+      // تأكد من وجود المستخدم
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ 
+          success: false,
+          error: 'يجب تسجيل الدخول أولاً'
+        });
+      }
+  
+      const { description, amount, category, paymentMethod } = req.body;
+      
+      // Validate required fields
+      if (!description || !amount || !category) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'يجب إدخال جميع الحقول المطلوبة' 
+        });
+      }
+  
+      // Create expense with default type if not provided
       const expense = new Expense({
         description,
         amount,
         category,
-        type,
-        recipient,
+        type: req.body.type || 'operational', // Add default type
         paymentMethod: paymentMethod || 'cash',
         receiptNumber: `EXP-${Date.now()}`,
         recordedBy: req.user.id
       });
-
+  
       await expense.save();
-      
-      // تحديث الرصيد (خصم المبلغ)
-      await updateTotalBalance(-amount);
-      
-      res.status(201).json(expense);
+  
+      // Record financial transaction
+      const transaction = new FinancialTransaction({
+        type: 'expense',
+        amount: expense.amount,
+        description: expense.description,
+        category: expense.category,
+        recordedBy: req.user.id,
+        reference: expense._id
+      });
+      await transaction.save();
+  
+      res.status(201).json({
+        success: true,
+        message: 'تمت إضافة المصروف بنجاح',
+        expense
+      });
     } catch (err) {
-      res.status(400).json({ error: err.message });
+      console.error('Error adding expense:', err);
+      res.status(500).json({ 
+        success: false,
+        error: err.message 
+      });
     }
   });
+// Diagnostic endpoint to check date formats in your database
+app.get('/api/accounting/debug-dates', async (req, res) => {
+  try {
+    const results = {
+      payments: {
+        count: await Payment.countDocuments({ status: 'paid' }),
+        recent: await Payment.find({ status: 'paid' })
+          .sort({ paymentDate: -1 })
+          .limit(10)
+          .select('paymentDate amount month student')
+          .populate('student', 'name'),
+        first: await Payment.findOne({ status: 'paid' })
+          .sort({ paymentDate: 1 })
+          .select('paymentDate amount month'),
+        withoutDate: await Payment.countDocuments({ 
+          status: 'paid', 
+          paymentDate: null 
+        })
+      },
+      expenses: {
+        count: await Expense.countDocuments({ status: 'paid' }),
+        recent: await Expense.find({ status: 'paid' })
+          .sort({ date: -1 })
+          .limit(10)
+          .select('date amount description')
+      },
+      commissions: {
+        count: await TeacherCommission.countDocuments({ status: 'paid' }),
+        recent: await TeacherCommission.find({ status: 'paid' })
+          .sort({ paymentDate: -1 })
+          .limit(10)
+          .select('paymentDate amount month teacher')
+          .populate('teacher', 'name')
+      }
+    };
+
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint to get stats for a specific date
+app.get('/api/accounting/date-stats/:date', async (req, res) => {
+  try {
+    const { date } = req.params;
+    const targetDate = new Date(date);
+    targetDate.setHours(0, 0, 0, 0);
+    const nextDate = new Date(targetDate);
+    nextDate.setDate(nextDate.getDate() + 1);
+
+    const payments = await Payment.aggregate([
+      {
+        $match: {
+          $or: [
+            { paymentDate: { $gte: targetDate, $lt: nextDate } },
+            { 
+              $expr: {
+                $and: [
+                  { $eq: [{ $ifNull: ["$paymentDate", null] }, null] },
+                  { $gte: ["$createdAt", targetDate] },
+                  { $lt: ["$createdAt", nextDate] }
+                ]
+              }
+            }
+          ],
+          status: 'paid'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    res.json({
+      date: targetDate,
+      payments: {
+        total: payments[0]?.total || 0,
+        count: payments[0]?.count || 0
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Force update payment dates for testing
+app.post('/api/accounting/test-update-dates', async (req, res) => {
+  try {
+    // Update payments without paymentDate to have today's date
+    const result = await Payment.updateMany(
+      { 
+        status: 'paid',
+        paymentDate: null 
+      },
+      { 
+        $set: { 
+          paymentDate: new Date(),
+          updatedAt: new Date()
+        } 
+      }
+    );
+
+    res.json({
+      message: `Updated ${result.modifiedCount} payments`,
+      result
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+  // ==============================================
+// نظام دفع العمولة الجديد للحصص الشاملة
+// ==============================================
+// Endpoint للتشخيص
+app.post('/api/accounting/test-payment', authenticate(['admin', 'accountant']), async (req, res) => {
+  try {
+    console.log('=== TEST PAYMENT REQUEST ===');
+    console.log('Body:', req.body);
+    console.log('User:', req.user);
+    
+    // التحقق من أن المستخدم موجود
+    const user = await User.findById(req.user.id);
+    console.log('Database user:', user);
+    
+    res.json({
+      success: true,
+      message: 'الاختبار ناجح',
+      user: {
+        id: req.user.id,
+        username: req.user.username,
+        role: req.user.role
+      },
+      body: req.body
+    });
+  } catch (err) {
+    console.error('Test payment error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post('/api/accounting/pay-class-commission', authenticate(['admin', 'accountant']), async (req, res) => {
+  try {
+    console.log('=== PAY CLASS COMMISSION REQUEST ===');
+    console.log('Body:', req.body);
+    console.log('User:', req.user);
+    
+    // التحقق من أن المستخدم مسجل الدخول
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ 
+        success: false,
+        error: 'يجب تسجيل الدخول أولاً' 
+      });
+    }
+
+    const { teacherId, classId, month, paymentMethod, notes } = req.body;
+    
+    // التحقق من البيانات المطلوبة
+    if (!teacherId || !classId || !month) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'بيانات ناقصة: يجب توفير teacherId, classId, month' 
+      });
+    }
+
+    // التحقق من وجود الأستاذ
+    const teacher = await Teacher.findById(teacherId);
+    if (!teacher) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الأستاذ غير موجود' 
+      });
+    }
+
+    // التحقق من وجود الحصة
+    const classObj = await Class.findById(classId)
+      .populate('students')
+      .populate('teacher');
+    
+    if (!classObj) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الحصة غير موجودة' 
+      });
+    }
+
+    console.log('Class found:', classObj.name);
+    console.log('Teacher:', teacher.name);
+    console.log('Month:', month);
+
+    // حساب العمولة (70% من سعر الحصة)
+    const totalCommission = classObj.price * 0.7;
+    
+    console.log('Class price:', classObj.price);
+    console.log('Commission (70%):', totalCommission);
+
+    // الحصول على المستخدم الذي قام بالدفع
+    const recordedBy = req.user.id;
+
+    // إنشاء سجل العمولة الشاملة
+    const commission = new TeacherCommission({
+      teacher: teacherId,
+      class: classId,
+      month: month,
+      type: 'class',
+      amount: totalCommission,
+      percentage: 70,
+      status: 'paid',
+      paymentDate: new Date(),
+      paymentMethod: paymentMethod || 'cash',
+      receiptNumber: `CLASS-COMM-${Date.now()}`,
+      recordedBy: recordedBy,
+      notes: notes || '',
+      studentDetails: classObj.students.map(student => ({
+        student: student._id,
+        attendancesCount: 0,
+        teacherShare: (classObj.price / (classObj.students.length || 1)) * 0.7,
+        includedInCommission: true
+      }))
+    });
+
+    console.log('Saving commission...');
+    await commission.save();
+    console.log('Commission saved:', commission._id);
+
+    // تسجيل المعاملة المالية (مصروف)
+    const expense = new Expense({
+      description: `عمولة الأستاذ ${teacher.name} عن حصة ${classObj.name} لشهر ${month}`,
+      amount: totalCommission,
+      category: 'salary',
+      type: 'teacher_payment',
+      recipient: {
+        type: 'teacher',
+        id: teacherId,
+        name: teacher.name
+      },
+      paymentMethod: paymentMethod || 'cash',
+      receiptNumber: commission.receiptNumber,
+      status: 'paid',
+      recordedBy: recordedBy,
+      notes: notes || `عمولة حصة شاملة لـ ${classObj.students.length} طلاب`
+    });
+
+    console.log('Saving expense...');
+    await expense.save();
+    console.log('Expense saved:', expense._id);
+
+    res.json({
+      success: true,
+      message: 'تم دفع عمولة الحصة الشاملة بنجاح',
+      commission: {
+        _id: commission._id,
+        receiptNumber: commission.receiptNumber,
+        amount: totalCommission,
+        month: month,
+        studentsCount: classObj.students.length
+      },
+      details: {
+        teacher: teacher.name,
+        class: classObj.name,
+        amount: totalCommission
+      }
+    });
+
+  } catch (err) {
+    console.error('=== ERROR IN PAY-CLASS-COMMISSION ===');
+    console.error('Error:', err);
+    console.error('Stack:', err.stack);
+    
+    // رسالة خطأ أكثر وضوحاً
+    let errorMessage = 'حدث خطأ أثناء دفع العمولة';
+    if (err.name === 'ValidationError') {
+      errorMessage = 'خطأ في التحقق من البيانات';
+    } else if (err.name === 'CastError') {
+      errorMessage = 'معرف غير صالح';
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// 2. دفع عمولة الأستاذ للحصة (شاملة لجميع الطلاب)
+// في server.js، ابحث عن هذا الكود وقم بتحديثه:
+app.post('/api/accounting/pay-class-commission',  async (req, res) => {
+  try {
+    console.log('=== PAY CLASS COMMISSION REQUEST ===');
+    console.log('Body:', req.body);
+    console.log('User:', req.user);
+    
+
+    const { teacherId, classId, month, round, paymentMethod, notes } = req.body;
+    
+    // التحقق من البيانات المطلوبة
+    if (!teacherId || !classId || !month) {
+      return res.status(400).json({ 
+        error: 'بيانات ناقصة: يجب توفير teacherId, classId, month' 
+      });
+    }
+
+    // التحقق من وجود الأستاذ
+    const teacher = await Teacher.findById(teacherId);
+    if (!teacher) {
+      return res.status(404).json({ error: 'الأستاذ غير موجود' });
+    }
+
+    // التحقق من وجود الحصة
+    const classObj = await Class.findById(classId)
+      .populate('students')
+      .populate('teacher');
+    
+    if (!classObj) {
+      return res.status(404).json({ error: 'الحصة غير موجودة' });
+    }
+
+    console.log('Class found:', classObj.name);
+    console.log('Teacher:', teacher.name);
+    console.log('Month:', month);
+
+    // حساب العمولة (70% من سعر الحصة)
+    const totalCommission = classObj.price * 0.7;
+    
+    console.log('Class price:', classObj.price);
+    console.log('Commission (70%):', totalCommission);
+
+    // الحصول على المستخدم الذي قام بالدفع
+    const recordedBy = req.user.id;
+
+    // إنشاء سجل العمولة الشاملة
+    const commission = new TeacherCommission({
+      teacher: teacherId,
+      class: classId,
+      month: month,
+      round: round || null,
+      type: 'class',
+      amount: totalCommission,
+      percentage: 70,
+      status: 'paid',
+      paymentDate: new Date(),
+      paymentMethod: paymentMethod || 'cash',
+      receiptNumber: `CLASS-COMM-${Date.now()}`,
+      recordedBy: recordedBy, // استخدام req.user.id
+      notes: notes || '',
+      studentDetails: classObj.students.map(student => ({
+        student: student._id,
+        attendancesCount: 0,
+        teacherShare: (classObj.price / (classObj.students.length || 1)) * 0.7,
+        includedInCommission: true
+      }))
+    });
+
+    console.log('Saving commission...');
+    await commission.save();
+    console.log('Commission saved:', commission._id);
+
+    // تسجيل المعاملة المالية (مصروف)
+    const expense = new Expense({
+      description: `عمولة الأستاذ ${teacher.name} عن حصة ${classObj.name} لشهر ${month}`,
+      amount: totalCommission,
+      category: 'salary',
+      type: 'teacher_payment',
+      recipient: {
+        type: 'teacher',
+        id: teacherId,
+        name: teacher.name
+      },
+      paymentMethod: paymentMethod || 'cash',
+      receiptNumber: commission.receiptNumber,
+      status: 'paid',
+      recordedBy: recordedBy, // استخدام req.user.id
+      notes: notes || `عمولة حصة شاملة لـ ${classObj.students.length} طلاب`
+    });
+
+    console.log('Saving expense...');
+    await expense.save();
+    console.log('Expense saved:', expense._id);
+
+    res.json({
+      success: true,
+      message: 'تم دفع عمولة الحصة الشاملة بنجاح',
+      commission: {
+        _id: commission._id,
+        receiptNumber: commission.receiptNumber,
+        amount: totalCommission,
+        month: month,
+        studentsCount: classObj.students.length
+      },
+      details: {
+        teacher: teacher.name,
+        class: classObj.name,
+        amount: totalCommission
+      }
+    });
+
+  } catch (err) {
+    console.error('=== ERROR IN PAY-CLASS-COMMISSION ===');
+    console.error('Error:', err);
+    console.error('Stack:', err.stack);
+    
+    // رسالة خطأ أكثر وضوحاً
+    let errorMessage = 'حدث خطأ أثناء دفع العمولة';
+    if (err.name === 'ValidationError') {
+      errorMessage = 'خطأ في التحقق من البيانات';
+    } else if (err.name === 'CastError') {
+      errorMessage = 'معرف غير صالح';
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// نقطة نهاية جديدة للحصول على مدفوعات الحصص لشهر معين
+app.get('/api/accounting/class-payments/month/:month', async (req, res) => {
+  try {
+    const { month } = req.params;
+    
+    console.log(`Getting class payments for month: ${month}`);
+    
+    // الحصول على جميع الحصص مع تفاصيلها
+    const classes = await Class.find()
+      .populate('teacher')
+      .populate('students');
+    
+    if (!classes || classes.length === 0) {
+      return res.json([]);
+    }
+    
+    const classPayments = [];
+    
+    for (const classObj of classes) {
+      if (!classObj.teacher) continue;
+      
+      // حساب سعر الحصة (إجمالي الإيرادات)
+      const classPrice = classObj.price || 0;
+      
+      // حساب عمولة الأستاذ (70%)
+      const teacherCommission = classPrice * 0.7;
+      
+      // التحقق مما إذا تم دفع العمولة لهذا الشهر
+      const existingCommission = await TeacherCommission.findOne({
+        teacher: classObj.teacher._id,
+        class: classObj._id,
+        month: month,
+        type: 'class'
+      });
+      
+      // جمع معلومات الطلاب
+      const studentsInfo = await Promise.all(
+        classObj.students.map(async (student) => {
+          // التحقق من دفع الطالب لهذا الشهر
+          const studentPayment = await Payment.findOne({
+            student: student._id,
+            class: classObj._id,
+            month: month,
+            status: 'paid'
+          });
+          
+          return {
+            studentId: student._id,
+            studentName: student.name,
+            studentIdNumber: student.studentId,
+            hasPaid: !!studentPayment,
+            paymentAmount: studentPayment?.amount || 0
+          };
+        })
+      );
+      
+      // حساب عدد الطلاب الذين دفعوا
+      const paidStudentsCount = studentsInfo.filter(s => s.hasPaid).length;
+      const totalStudentsCount = studentsInfo.length;
+      
+      classPayments.push({
+        class: {
+          _id: classObj._id,
+          name: classObj.name,
+          subject: classObj.subject,
+          price: classPrice,
+          schedule: classObj.schedule
+        },
+        teacher: {
+          _id: classObj.teacher._id,
+          name: classObj.teacher.name,
+          phone: classObj.teacher.phone,
+          email: classObj.teacher.email
+        },
+        month: month,
+        commissionAmount: teacherCommission,
+        status: existingCommission ? existingCommission.status : 'pending',
+        paymentDate: existingCommission?.paymentDate || null,
+        receiptNumber: existingCommission?.receiptNumber || null,
+        students: {
+          total: totalStudentsCount,
+          paid: paidStudentsCount,
+          list: studentsInfo
+        },
+        canPay: paidStudentsCount > 0 && !existingCommission,
+        existingCommissionId: existingCommission?._id
+      });
+    }
+    
+    // تصفية الحصص التي تحتوي على طلاب على الأقل
+    const filteredPayments = classPayments.filter(cp => cp.students.total > 0);
+    
+    res.json(filteredPayments);
+    
+  } catch (err) {
+    console.error('Error getting class payments:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+// 3. الحصول على دخل شهري + مصاريف + صافي الربح
+app.get('/api/accounting/monthly-financial-report',  async (req, res) => {
+  try {
+    const { month, year, startDate, endDate } = req.query;
+    
+    let dateRange = {};
+    
+    if (month && year) {
+      const start = new Date(year, month - 1, 1);
+      const end = new Date(year, month, 0);
+      dateRange = { $gte: start, $lte: end };
+    } else if (startDate && endDate) {
+      dateRange = { $gte: new Date(startDate), $lte: new Date(endDate) };
+    } else {
+      // افتراضي: الشهر الحالي
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      dateRange = { $gte: start, $lte: end };
+    }
+
+    // 1. حساب الإيرادات
+    const incomeSources = {
+      // مدفوعات الحصص
+      classPayments: await Payment.aggregate([
+        {
+          $match: {
+            paymentDate: dateRange,
+            status: 'paid'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' },
+            count: { $sum: 1 }
+          }
+        }
+      ]),
+      
+      // رسوم التسجيل
+      registrationFees: await SchoolFee.aggregate([
+        {
+          $match: {
+            paymentDate: dateRange,
+            status: 'paid'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' },
+            count: { $sum: 1 }
+          }
+        }
+      ]),
+      
+      // إيرادات أخرى
+      otherIncome: await FinancialTransaction.aggregate([
+        {
+          $match: {
+            date: dateRange,
+            type: 'income',
+            category: { $nin: ['tuition', 'registration'] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' },
+            count: { $sum: 1 }
+          }
+        }
+      ])
+    };
+
+    const totalIncome = 
+      (incomeSources.classPayments[0]?.total || 0) +
+      (incomeSources.registrationFees[0]?.total || 0) +
+      (incomeSources.otherIncome[0]?.total || 0);
+
+    // 2. حساب المصروفات
+    const expenseCategories = {
+      // رواتب الأساتذة
+      teacherSalaries: await Expense.aggregate([
+        {
+          $match: {
+            date: dateRange,
+            category: 'salary',
+            type: 'teacher_payment',
+            status: 'paid'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' },
+            count: { $sum: 1 }
+          }
+        }
+      ]),
+      
+      // رواتب الموظفين
+      staffSalaries: await Expense.aggregate([
+        {
+          $match: {
+            date: dateRange,
+            category: 'salary',
+            type: { $ne: 'teacher_payment' },
+            status: 'paid'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' },
+            count: { $sum: 1 }
+          }
+        }
+      ]),
+      
+      // مصروفات تشغيلية
+      operational: await Expense.aggregate([
+        {
+          $match: {
+            date: dateRange,
+            category: { $nin: ['salary'] },
+            status: 'paid'
+          }
+        },
+        {
+          $group: {
+            _id: '$category',
+            total: { $sum: '$amount' },
+            count: { $sum: 1 }
+          }
+        }
+      ])
+    };
+
+    const totalExpenses = 
+      (expenseCategories.teacherSalaries[0]?.total || 0) +
+      (expenseCategories.staffSalaries[0]?.total || 0) +
+      expenseCategories.operational.reduce((sum, item) => sum + (item.total || 0), 0);
+
+    // 3. حساب صافي الربح
+    const netProfit = totalIncome - totalExpenses;
+
+    // 4. تفاصيل إضافية
+    const incomeDetails = await FinancialTransaction.find({
+      date: dateRange,
+      type: 'income'
+    })
+    .populate('recordedBy')
+    .populate('student')
+    .sort({ date: -1 })
+    .limit(50);
+
+    const expenseDetails = await Expense.find({
+      date: dateRange,
+      status: 'paid'
+    })
+    .populate('recordedBy')
+    .sort({ date: -1 })
+    .limit(50);
+
+    res.json({
+      period: dateRange,
+      income: {
+        total: totalIncome,
+        breakdown: {
+          classPayments: incomeSources.classPayments[0] || { total: 0, count: 0 },
+          registrationFees: incomeSources.registrationFees[0] || { total: 0, count: 0 },
+          otherIncome: incomeSources.otherIncome[0] || { total: 0, count: 0 }
+        },
+        details: incomeDetails
+      },
+      expenses: {
+        total: totalExpenses,
+        breakdown: {
+          teacherSalaries: expenseCategories.teacherSalaries[0] || { total: 0, count: 0 },
+          staffSalaries: expenseCategories.staffSalaries[0] || { total: 0, count: 0 },
+          operational: expenseCategories.operational
+        },
+        details: expenseDetails
+      },
+      profit: {
+        netProfit: netProfit,
+        profitMargin: totalIncome > 0 ? ((netProfit / totalIncome) * 100).toFixed(2) : 0
+      },
+      summary: {
+        incomeTransactions: incomeDetails.length,
+        expenseTransactions: expenseDetails.length,
+        averageDailyIncome: calculateAverageDaily(incomeDetails, dateRange),
+        averageDailyExpense: calculateAverageDaily(expenseDetails, dateRange)
+      }
+    });
+
+  } catch (err) {
+    console.error('Error generating financial report:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. تفاصيل رسوم التسجيل
+app.get('/api/accounting/registration-fee-details',  async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const query = {};
+
+    if (startDate || endDate) {
+      query.paymentDate = {};
+      if (startDate) query.paymentDate.$gte = new Date(startDate);
+      if (endDate) query.paymentDate.$lte = new Date(endDate);
+    }
+
+    const fees = await SchoolFee.find(query)
+      .populate('student')
+      .populate('recordedBy')
+      .sort({ paymentDate: -1 });
+
+    res.json(fees);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. إحصائيات مالية سريعة
+app.get('/api/accounting/quick-financial-stats',  async (req, res) => {
+  try {
+    // الشهر الحالي
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    // إجمالي الإيرادات
+    const incomeResult = await FinancialTransaction.aggregate([
+      {
+        $match: {
+          type: 'income',
+          date: { $gte: startOfMonth, $lte: endOfMonth }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    // إجمالي المصروفات
+    const expenseResult = await Expense.aggregate([
+      {
+        $match: {
+          status: 'paid',
+          date: { $gte: startOfMonth, $lte: endOfMonth }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    // المدفوعات المعلقة
+    const pendingCount = await Payment.countDocuments({ 
+      status: 'pending',
+      month: now.toISOString().slice(0, 7)
+    });
+
+    res.json({
+      totalIncome: incomeResult[0]?.total || 0,
+      totalExpenses: expenseResult[0]?.total || 0,
+      pendingPayments: pendingCount,
+      lastUpdated: new Date()
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==============================================
+// دوال مساعدة
+// ==============================================
+
+// دالة للحصول على نطاق تاريخ الشهر
+function getMonthDateRange(monthString) {
+  const [year, month] = monthString.split('-').map(Number);
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0);
+  
+  return {
+    $gte: startDate,
+    $lte: endDate
+  };
+}
+
+// دالة لحساب متوسط القيم اليومية
+function calculateAverageDaily(transactions, dateRange) {
+  if (!transactions || transactions.length === 0) return 0;
+  
+  const start = new Date(dateRange.$gte);
+  const end = new Date(dateRange.$lte);
+  const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) || 1;
+  
+  const total = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+  return Math.round(total / days);
+}
+
+
+
+// 4. تصدير تقرير مالي
+app.get('/api/accounting/export-financial-report', async (req, res) => {
+  try {
+    const { format, month, year, startDate, endDate } = req.query;
+    
+    // الحصول على البيانات
+    const report = await getFinancialReportData(month, year, startDate, endDate);
+    
+    if (format === 'excel') {
+      // إنشاء ملف Excel
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('التقرير المالي');
+      
+      // إضافة البيانات إلى Excel
+      await generateExcelReport(worksheet, report);
+      
+      // إعداد الاستجابة
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename=financial-report.xlsx');
+      
+      await workbook.xlsx.write(res);
+      res.end();
+      
+    } else if (format === 'pdf') {
+      // إنشاء ملف PDF (سيتطلب مكتبة مثل pdfkit)
+      // يمكنك إضافة هذا لاحقاً
+      res.status(501).json({ error: 'تصدير PDF غير متاح حالياً' });
+    } else {
+      res.json(report);
+    }
+    
+  } catch (err) {
+    console.error('Error exporting report:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==============================================
+// دوال مساعدة
+// ==============================================
+
+// دالة لحساب العمولة
+async function calculateClassCommission(teacherId, classId, month) {
+  try {
+    const teacher = await Teacher.findById(teacherId);
+    const classObj = await Class.findById(classId).populate('students');
+    
+    if (!teacher || !classObj) {
+      return { error: 'الأستاذ أو الحصة غير موجودة' };
+    }
+
+    // حساب عدد الحصص الشهري
+    const weeklySessions = classObj.schedule.length;
+    const totalMonthlySessions = weeklySessions * 4; // 4 أسابيع في الشهر
+    
+    const students = classObj.students;
+    const totalClassRevenue = classObj.price;
+    const studentMonthlyFee = totalClassRevenue / students.length;
+    const totalTeacherCommission = totalClassRevenue * 0.7;
+
+    return {
+      data: {
+        teacher,
+        class: classObj,
+        month,
+        students: students.map(student => ({
+          student,
+          monthlyFee: studentMonthlyFee,
+          teacherShare: studentMonthlyFee * 0.7
+        })),
+        summary: {
+          totalStudents: students.length,
+          totalClassRevenue,
+          totalTeacherCommission
+        }
+      }
+    };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+// دالة لحساب متوسط القيم اليومية
+function calculateAverageDaily(transactions, dateRange) {
+  if (!transactions.length) return 0;
+  
+  const start = new Date(dateRange.$gte);
+  const end = new Date(dateRange.$lte);
+  const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) || 1;
+  
+  const total = transactions.reduce((sum, t) => sum + t.amount, 0);
+  return total / days;
+}
+
+// دالة لإنشاء تقرير Excel
+async function generateExcelReport(worksheet, report) {
+  // إضافة العناوين
+  worksheet.columns = [
+    { header: 'التاريخ', key: 'date', width: 15 },
+    { header: 'النوع', key: 'type', width: 15 },
+    { header: 'الوصف', key: 'description', width: 40 },
+    { header: 'المبلغ', key: 'amount', width: 15 },
+    { header: 'التصنيف', key: 'category', width: 20 },
+    { header: 'الملاحظات', key: 'notes', width: 30 }
+  ];
+
+  // إضافة بيانات الإيرادات
+  worksheet.addRow({ description: '=== الإيرادات ===' });
+  report.income.details.forEach(item => {
+    worksheet.addRow({
+      date: new Date(item.date).toLocaleDateString('ar-EG'),
+      type: 'إيراد',
+      description: item.description,
+      amount: item.amount,
+      category: item.category,
+      notes: item.notes || ''
+    });
+  });
+
+  // إضافة بيانات المصروفات
+  worksheet.addRow({ description: '=== المصروفات ===' });
+  report.expenses.details.forEach(item => {
+    worksheet.addRow({
+      date: new Date(item.date).toLocaleDateString('ar-EG'),
+      type: 'مصروف',
+      description: item.description,
+      amount: item.amount,
+      category: item.category,
+      notes: item.notes || ''
+    });
+  });
+
+  // إضافة الملخص
+  worksheet.addRow({ description: '=== الملخص ===' });
+  worksheet.addRow({ description: 'إجمالي الإيرادات', amount: report.income.total });
+  worksheet.addRow({ description: 'إجمالي المصروفات', amount: report.expenses.total });
+  worksheet.addRow({ description: 'صافي الربح', amount: report.profit.netProfit });
+}
+
+// دالة للحصول على نطاق تاريخ الشهر
+function getMonthDateRange(monthString) {
+  const [year, month] = monthString.split('-').map(Number);
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0);
+  
+  return {
+    $gte: startDate,
+    $lte: endDate
+  };
+}
+
+// دالة لحساب عدد الحصص الإجمالي
+function calculateTotalSessions(weeklySessions, monthString) {
+  // 4 أسابيع في الشهر كتقريب
+  return weeklySessions * 4;
+}
+
+// دالة للحصول على فترة الجولة
+async function getRoundPeriod(roundId) {
+  // يمكنك توسيع هذه الدالة للحصول على بيانات الجولة من قاعدة البيانات
+  return {
+    month: new Date().toISOString().slice(0, 7),
+    startDate: new Date(),
+    endDate: new Date()
+  };
+}
 
   app.post('/api/accounting/teacher-commissions/pay',  async (req, res) => {
     try {
@@ -5024,7 +6254,7 @@ app.post('/api/accounting/teacher-commissions/pay-by-class',  async (req, res) =
       res.status(500).json({ error: err.message });
   }
 });
-  app.get('/api/accounting/teacher-commissions', authenticate(['admin', 'accountant', 'teacher']), async (req, res) => {
+  app.get('/api/accounting/teacher-commissions', async (req, res) => {
     try {
       const { teacher, month, status } = req.query;
       const query = {};
@@ -5729,6 +6959,60 @@ app.post('/api/students/:id/pay-registration',  async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+app.get('/api/count/todays-expenses', async (req, res) => {
+  try {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const todaysExpensesCount = await Expense.countDocuments({
+          date: {
+              $gte: startOfDay,
+              $lte: endOfDay
+          }
+      });
+
+      res.json({ count: todaysExpensesCount });
+  } catch (err) {
+      res.status(500).json({ error: err.message });
+  }
+});
+app.get('/api/accounting/total-expenses', async (req, res) => {
+  try {
+      const totalExpensesResult = await Expense.aggregate([
+          { $match: { status: 'paid' } },
+          { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]);
+      
+      const totalExpenses = totalExpensesResult[0]?.total || 0;
+      
+      res.json({ totalExpenses });
+  } catch (err) {
+      res.status(500).json({ error: err.message });
+  }
+});
+app.get('/api/accounting/count-amout-todays-expenses', async (req, res) => {
+  try {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      const todaysExpensesCount = await Expense.countDocuments({
+          date: {
+              $gte: startOfDay,
+              $lte: endOfDay
+          }
+      });
+      
+      res.json({ count: todaysExpensesCount });
+  } catch (err) {
+      res.status(500).json({ error: err.message });
+  }
+});
+
+
 // إضافة نقطة نهاية جديدة في الخادم
 app.get('/api/accounting/summary',  async (req, res) => {
   try {
@@ -5759,13 +7043,29 @@ app.get('/api/accounting/summary',  async (req, res) => {
 
 // دالة محسنة باستخدام النقطة الجديدة
 
-  app.post('/api/accounting/expenses',  async (req, res) => {
+app.post('/api/accounting/expenses', authenticate(['admin', 'accountant']), async (req, res) => {
   try {
-    const { description, amount, category, paymentMethod } = req.body;
+    console.log('=== ADD EXPENSE REQUEST ===');
+    console.log('Headers:', req.headers);
+    console.log('User:', req.user);
+    console.log('Body:', req.body);
+    
+    // تأكد من وجود المستخدم
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ 
+        success: false,
+        error: 'يجب تسجيل الدخول أولاً'
+      });
+    }
+
+    const { description, amount, category, paymentMethod  } = req.body;
     
     // Validate required fields
     if (!description || !amount || !category) {
-      return res.status(400).json({ error: 'يجب إدخال جميع الحقول المطلوبة' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'يجب إدخال جميع الحقول المطلوبة' 
+      });
     }
 
     const expense = new Expense({
@@ -5774,7 +7074,7 @@ app.get('/api/accounting/summary',  async (req, res) => {
       category,
       paymentMethod: paymentMethod || 'cash',
       receiptNumber: `EXP-${Date.now()}`,
-      recordedBy: req.user.id
+      recordedBy: req.user.id // استخدم req.user.id مباشرة
     });
 
     await expense.save();
@@ -5785,16 +7085,24 @@ app.get('/api/accounting/summary',  async (req, res) => {
       amount: expense.amount,
       description: expense.description,
       category: expense.category,
-      recordedBy: req.user.id,
+      recordedBy: req.user.id, // استخدم req.user.id هنا أيضاً
       reference: expense._id
     });
     await transaction.save();
 
-    res.status(201).json(expense);
+    res.status(201).json({
+      success: true,
+      message: 'تمت إضافة المصروف بنجاح',
+      expense
+    });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    console.error('Error adding expense:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
   }
-  });
+});
 
   // Invoices
   app.get('/api/accounting/invoices',  async (req, res) => {
@@ -6169,6 +7477,31 @@ app.get('/api/classes/count', async (req, res) => {
 });
 
 
+app.post('/api/accounting/transactions', async (req, res) => {
+  try {
+      const { type, amount, description, category, date, reference } = req.body;
+      
+      // Validate required fields
+      if (!type || !amount || !description || !category) {
+          return res.status(400).json({ error: 'يجب إدخال جميع الحقول المطلوبة' });
+      }
+      
+      const transaction = new FinancialTransaction({
+          type,
+          amount,
+          description,
+          category,
+          date,
+          reference
+      });
+      
+      await transaction.save();
+      
+      res.json({ message: 'Transaction added successfully', transaction });
+  } catch (err) {
+      res.status(500).json({ error: err.message });
+  }
+});
 
 // Add the missing transactions endpoint
 app.get('/api/accounting/transactions', async (req, res) => {
@@ -6196,7 +7529,55 @@ app.get('/api/accounting/transactions', async (req, res) => {
   }
 });
 
+// Add this test endpoint to check if there are any payments at all
+app.get('/api/accounting/test-payments', async (req, res) => {
+  try {
+    const allPayments = await Payment.find({ status: 'paid' })
+      .populate('student')
+      .limit(10);
+    
+    const count = await Payment.countDocuments({ status: 'paid' });
+    
+    res.json({
+      totalPaidPayments: count,
+      samplePayments: allPayments.map(p => ({
+        id: p._id,
+        amount: p.amount,
+        paymentDate: p.paymentDate,
+        student: p.student?.name,
+        month: p.month
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
+// Add this to see what dates exist in your payments
+app.get('/api/accounting/payment-dates', async (req, res) => {
+  try {
+    const dates = await Payment.aggregate([
+      { $match: { status: 'paid', paymentDate: { $ne: null } } },
+      { 
+        $group: {
+          _id: {
+            year: { $year: '$paymentDate' },
+            month: { $month: '$paymentDate' },
+            day: { $dayOfMonth: '$paymentDate' }
+          },
+          count: { $sum: 1 },
+          total: { $sum: '$amount' }
+        }
+      },
+      { $sort: { '_id.year': -1, '_id.month': -1, '_id.day': -1 } },
+      { $limit: 10 }
+    ]);
+    
+    res.json(dates);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // حساب مدخول اليوم
 // حساب مدخول اليوم - الإصدار المصحح
 app.get('/api/accounting/daily-income',  async (req, res) => {
@@ -6211,19 +7592,23 @@ app.get('/api/accounting/daily-income',  async (req, res) => {
       targetDate = new Date();
     }
     
-    targetDate.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(targetDate);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // تعيين الوقت إلى بداية اليوم (00:00:00)
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    // تعيين الوقت إلى نهاية اليوم (23:59:59.999)
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
 
-    console.log(`بحث عن دخل يوم: ${targetDate} إلى ${tomorrow}`);
+    console.log(`بحث عن دخل يوم: ${startOfDay} إلى ${endOfDay}`);
 
     // 1. حساب مدفوعات الحصص اليومية
     const dailyPayments = await Payment.aggregate([
       {
         $match: {
           paymentDate: {
-            $gte: targetDate,
-            $lt: tomorrow
+            $gte: startOfDay,
+            $lte: endOfDay
           },
           status: 'paid'
         }
@@ -6232,8 +7617,7 @@ app.get('/api/accounting/daily-income',  async (req, res) => {
         $group: {
           _id: null,
           total: { $sum: '$amount' },
-          count: { $sum: 1 },
-          payments: { $push: '$$ROOT' }
+          count: { $sum: 1 }
         }
       }
     ]);
@@ -6243,8 +7627,8 @@ app.get('/api/accounting/daily-income',  async (req, res) => {
       {
         $match: {
           paymentDate: {
-            $gte: targetDate,
-            $lt: tomorrow
+            $gte: startOfDay,
+            $lte: endOfDay
           },
           status: 'paid'
         }
@@ -6253,8 +7637,7 @@ app.get('/api/accounting/daily-income',  async (req, res) => {
         $group: {
           _id: null,
           total: { $sum: '$amount' },
-          count: { $sum: 1 },
-          fees: { $push: '$$ROOT' }
+          count: { $sum: 1 }
         }
       }
     ]);
@@ -6264,8 +7647,8 @@ app.get('/api/accounting/daily-income',  async (req, res) => {
       {
         $match: {
           date: {
-            $gte: targetDate,
-            $lt: tomorrow
+            $gte: startOfDay,
+            $lte: endOfDay
           },
           type: 'income'
         }
@@ -6274,8 +7657,27 @@ app.get('/api/accounting/daily-income',  async (req, res) => {
         $group: {
           _id: null,
           total: { $sum: '$amount' },
-          count: { $sum: 1 },
-          transactions: { $push: '$$ROOT' }
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // 4. حساب الإيرادات من الفواتير (إذا كنت تستخدم Invoice model)
+    const dailyInvoices = await Invoice.aggregate([
+      {
+        $match: {
+          date: {
+            $gte: startOfDay,
+            $lte: endOfDay
+          },
+          status: 'paid'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$totalAmount' },
+          count: { $sum: 1 }
         }
       }
     ]);
@@ -6283,24 +7685,43 @@ app.get('/api/accounting/daily-income',  async (req, res) => {
     const paymentsTotal = dailyPayments[0]?.total || 0;
     const feesTotal = dailySchoolFees[0]?.total || 0;
     const otherIncomeTotal = dailyTransactions[0]?.total || 0;
-    const totalIncome = paymentsTotal + feesTotal + otherIncomeTotal;
+    const invoicesTotal = dailyInvoices[0]?.total || 0;
+    
+    const totalIncome = paymentsTotal + feesTotal + otherIncomeTotal + invoicesTotal;
 
     // الحصول على تفاصيل إضافية للعرض
     const paymentDetails = await Payment.find({
-      paymentDate: { $gte: targetDate, $lt: tomorrow },
+      paymentDate: { $gte: startOfDay, $lte: endOfDay },
       status: 'paid' 
-    }).populate('student').populate('class').limit(10);
+    })
+    .populate('student', 'name studentId')
+    .populate('class', 'name price')
+    .populate('recordedBy', 'username fullName')
+    .limit(20)
+    .sort({ paymentDate: -1 });
 
     const feeDetails = await SchoolFee.find({
-      paymentDate: { $gte: targetDate, $lt: tomorrow },
+      paymentDate: { $gte: startOfDay, $lte: endOfDay },
       status: 'paid'
-    }).populate('student').limit(10);
+    })
+    .populate('student', 'name studentId')
+    .populate('recordedBy', 'username fullName')
+    .limit(20)
+    .sort({ paymentDate: -1 });
+
+    // تحويل التاريخ إلى تنسيق عربي
+    const arabicDate = new Intl.DateTimeFormat('ar-EG', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'long'
+    }).format(targetDate);
 
     res.json({
       success: true,
       dailyIncome: totalIncome,
-      date: targetDate.toISOString().split('T')[0],
-      formattedDate: targetDate.toLocaleDateString('ar-EG'),
+      date: startOfDay.toISOString().split('T')[0],
+      formattedDate: arabicDate,
       breakdown: {
         payments: {
           amount: paymentsTotal,
@@ -6315,13 +7736,27 @@ app.get('/api/accounting/daily-income',  async (req, res) => {
         otherIncome: {
           amount: otherIncomeTotal,
           count: dailyTransactions[0]?.count || 0
+        },
+        invoices: {
+          amount: invoicesTotal,
+          count: dailyInvoices[0]?.count || 0
         }
       },
       summary: {
         totalAmount: totalIncome,
         totalTransactions: (dailyPayments[0]?.count || 0) + 
                           (dailySchoolFees[0]?.count || 0) + 
-                          (dailyTransactions[0]?.count || 0)
+                          (dailyTransactions[0]?.count || 0) +
+                          (dailyInvoices[0]?.count || 0)
+      },
+      debug: {
+        dateRange: {
+          start: startOfDay,
+          end: endOfDay
+        },
+        paymentsQueryResult: dailyPayments,
+        feesQueryResult: dailySchoolFees,
+        transactionsQueryResult: dailyTransactions
       }
     });
 

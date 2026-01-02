@@ -1,0 +1,74 @@
+.dashboard {
+    padding: 20px;
+  }
+  
+  .stat-card {
+    border-radius: 10px;
+    padding: 20px;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    transition: transform 0.3s;
+  }
+  
+  .stat-card:hover {
+    transform: translateY(-5px);
+  }
+  
+  .stat-icon {
+    font-size: 40px;
+    opacity: 0.8;
+  }
+  
+  .stat-info h4 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: bold;
+  }
+  
+  .stat-info p {
+    margin: 5px 0 0;
+    opacity: 0.9;
+    font-size: 14px;
+  }
+  
+  .card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    margin-bottom: 20px;
+  }
+  
+  .card-header {
+    background-color: white;
+    border-bottom: 1px solid #eee;
+    padding: 15px 20px;
+  }
+  
+  .card-title {
+    font-weight: 600;
+    color: #2c3e50;
+  }
+  
+  .table th {
+    font-weight: 600;
+    color: #2c3e50;
+    border-bottom: 2px solid #dee2e6;
+  }
+  
+  .table td {
+    vertical-align: middle;
+  }
+  
+  .badge {
+    padding: 5px 10px;
+    font-weight: 500;
+  }
+  
+  /* ألوان البطاقات */
+  .bg-primary { background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); }
+  .bg-success { background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%); }
+  .bg-info { background: linear-gradient(135deg, #1abc9c 0%, #16a085 100%); }
+  .bg-warning { background: linear-gradient(135deg, #f39c12 0%, #d35400 100%); }

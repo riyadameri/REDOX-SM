@@ -1,0 +1,65 @@
+<p>accounting works!</p>
+<div class="accounting-container">
+    <nav class="accounting-nav">
+      <div class="nav-header">
+        <h3><i class="fas fa-calculator"></i> نظام المحاسبة</h3>
+      </div>
+      
+      <ul class="nav-links">
+        <li>
+          <a routerLink="/accounting/dashboard" routerLinkActive="active">
+            <i class="fas fa-tachometer-alt"></i> لوحة التحكم
+          </a>
+        </li>
+        <li>
+          <a routerLink="/accounting/transactions" routerLinkActive="active">
+            <i class="fas fa-exchange-alt"></i> المعاملات المالية
+          </a>
+        </li>
+        <li>
+          <a routerLink="/accounting/expenses" routerLinkActive="active">
+            <i class="fas fa-money-bill-wave"></i> إدارة المصروفات
+          </a>
+        </li>
+        <li>
+          <a routerLink="/accounting/budgets" routerLinkActive="active">
+            <i class="fas fa-chart-line"></i> الميزانيات
+          </a>
+        </li>
+        <li>
+          <a routerLink="/accounting/school-fees" routerLinkActive="active">
+            <i class="fas fa-graduation-cap"></i> رسوم التسجيل
+          </a>
+        </li>
+        <li>
+          <a routerLink="/accounting/teacher-payments" routerLinkActive="active">
+            <i class="fas fa-chalkboard-teacher"></i> مدفوعات الأساتذة
+          </a>
+        </li>
+        <li>
+          <a routerLink="/accounting/teacher-commissions" routerLinkActive="active">
+            <i class="fas fa-percentage"></i> عمولات الأساتذة
+          </a>
+        </li>
+        <li>
+          <a routerLink="/accounting/staff-salaries" routerLinkActive="active">
+            <i class="fas fa-users"></i> رواتب الموظفين
+          </a>
+        </li>
+        <li>
+          <a routerLink="/accounting/invoices" routerLinkActive="active">
+            <i class="fas fa-file-invoice"></i> الفواتير
+          </a>
+        </li>
+        <li>
+          <a routerLink="/accounting/reports" routerLinkActive="active">
+            <i class="fas fa-chart-bar"></i> التقارير
+          </a>
+        </li>
+      </ul>
+    </nav>
+  
+    <div class="accounting-content">
+      <router-outlet></router-outlet>
+    </div>
+  </div>
