@@ -4519,9 +4519,9 @@ app.get('^', (req, res) => {
   app.get('/student/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'student-login.html'));
   });
-  app.get('/accounting', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'accounting.html'));
-  });
+  // app.get('/accounting', (req, res) => {
+  //   res.sendFile(path.join(__dirname, 'public', 'accounting.html'));
+  // });
 
 
   app.get('/student/dashboard', authenticate(['student', 'secretary', 'admin','accountant']), (req, res) => {
