@@ -30,11 +30,11 @@ require('dotenv').config();
 // Replace this CORS configuration in your server.js:
 // Use this CORS configuration instead:
 const corsOptions = {
-  origin: '*', // Allow all origins or specify your frontend URL  
+  origin: '*',  
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true,
-  preflightContinue: false,
+  preflightContinue: true,
   optionsSuccessStatus: 204,
   exposedHeaders: ['Content-Range', 'X-Content-Range'] // Optional: if you need custom headers
 };
@@ -74,7 +74,27 @@ app.options('*', cors(corsOptions));
 
   },{  strictPopulate: false 
   })
-
+  const roundPaymentSchema = new mongoose.Schema({
+    student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
+    class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class' },
+    roundNumber: { type: String, required: true },
+    sessionCount: { type: Number, required: true },
+    sessionPrice: { type: Number, required: true },
+    totalAmount: { type: Number, required: true },
+    startDate: { type: Date, required: true },
+    endDate: { type: Date, required: true },
+    status: { type: String, enum: ['pending', 'paid', 'cancelled'], default: 'pending' },
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    notes: String,
+    sessions: [{
+      sessionNumber: Number,
+      date: Date,
+      status: { type: String, enum: ['pending', 'completed', 'cancelled'], default: 'pending' },
+      price: Number
+    }]
+  }, { timestamps: true });
+  
+  const RoundPayment = mongoose.model('RoundPayment', roundPaymentSchema);
   const studentSchema = new mongoose.Schema({
     name: { type: String, required: true }, 
     studentId: { 
@@ -135,20 +155,37 @@ app.options('*', cors(corsOptions));
     location: String
   });
 
-  const classSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    subject: { type: String, enum: ['رياضيات', 'فيزياء', 'علوم', 'لغة عربية', 'لغة فرنسية', 'لغة انجليزية', 'تاريخ', 'جغرافيا', 'فلسفة', 'إعلام آلي'] },
-    description: String,
-    schedule: [{
-      day: { type: String, enum: ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'] },
-      time: String,
-      classroom: { type: mongoose.Schema.Types.ObjectId, ref: 'Classroom' }
-    }],
-    academicYear: { type: String, enum: ['1AS', '2AS', '3AS', '1MS', '2MS', '3MS', '4MS', '5MS','1AP','2AP','3AP','4AP','5AP','NS'] },
-    teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher' },
-    students: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Student' }],
-    price: { type: Number, required: true }
-  });
+// في قسم classSchema، أضف الحقل التالي:
+// في قسم classSchema، أضف الحقول التالية:
+const classSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  subject: { type: String, enum: ['رياضيات', 'فيزياء', 'علوم', 'لغة عربية', 'لغة فرنسية', 'لغة انجليزية', 'تاريخ', 'جغرافيا', 'فلسفة', 'إعلام آلي'] },
+  description: String,
+  schedule: [{
+    day: { type: String, enum: ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'] },
+    time: String,
+    classroom: { type: mongoose.Schema.Types.ObjectId, ref: 'Classroom' }
+  }],
+  academicYear: { type: String, enum: ['1AS', '2AS', '3AS', '1MS', '2MS', '3MS', '4MS', '5MS','1AP','2AP','3AP','4AP','5AP','NS'] },
+  teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher' },
+  students: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Student' }],
+  price: { type: Number, required: true },
+  
+  // حقل جديد لنظام الدفع
+  paymentSystem: {
+    type: String,
+    enum: ['monthly', 'rounds'], // شهري أو جولات
+    default: 'monthly'
+  },
+  
+  // إعدادات إضافية لنظام الجولات
+  roundSettings: {
+    sessionCount: { type: Number, default: 8 }, // عدد الجلسات في الجولة
+    sessionDuration: { type: Number, default: 2 }, // مدة الجلسة بالساعات
+    breakBetweenSessions: { type: Number, default: 0 } // استراحة بين الجلسات بالأيام
+  }
+}, { timestamps: true });
+
 
   const attendanceSchema = new mongoose.Schema({
     student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', required: true },
@@ -203,15 +240,15 @@ app.options('*', cors(corsOptions));
     class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: false },
     amount: { type: Number, required: true },
     month: { type: String, required: true },
+    monthCode: { type: String, required: false }, // تنسيق YYYY-MM للترتيب
     paymentDate: { type: Date, default: null },
     status: { type: String, enum: ['paid', 'pending', 'late'], default: 'pending' },
     paymentMethod: { type: String, enum: ['cash', 'bank', 'online'], default: 'cash' },
     invoiceNumber: String,
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    // حقل جديد للعمولة
     commissionRecorded: { type: Boolean, default: false },
     commissionId: { type: mongoose.Schema.Types.ObjectId, ref: 'TeacherCommission' }
-  });
+  }, { timestamps: true });
   
   const messageSchema = new mongoose.Schema({
     sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -1313,7 +1350,7 @@ app.get('/api/classrooms/:id/current-classes',  async (req, res) => {
 
   // Get available classes for student enrollment
 // Get available classes (classes that are not full and match certain criteria)
-// app.get('/api/classes/available', authenticate(['admin', 'secretary', 'accountant', 'teacher']), async (req, res) => {
+// app.get('/api/classes/available',  async (req, res) => {
 //   try {
 //     const { 
 //       studentId, 
@@ -2399,9 +2436,10 @@ app.get('/api/accounting/reports/financial',  async (req, res) => {
   });
 
 // In your server.js, add logging to the /api/classes POST endpoint:
+// تأكد من أن هذا الكود موجود في نقطة /api/classes POST
 app.post('/api/classes',  async (req, res) => {
   try {
-    console.log('Received class creation request:', req.body); // Add this line
+    console.log('Received class creation request:', req.body);
     
     const { name, subject, teacher, academicYear } = req.body;
     
@@ -2421,21 +2459,37 @@ app.post('/api/classes',  async (req, res) => {
       });
     }
 
-    console.log('Creating new class with data:', req.body); // Add this line
+    // التحقق من بيانات نظام الدفع
+    if (req.body.paymentSystem && !['monthly', 'rounds'].includes(req.body.paymentSystem)) {
+      return res.status(400).json({ error: 'نظام الدفع غير صالح' });
+    }
+
+    // التحقق من إعدادات الجولات
+    if (req.body.paymentSystem === 'rounds' && req.body.roundSettings) {
+      if (!req.body.roundSettings.sessionCount || req.body.roundSettings.sessionCount < 1) {
+        return res.status(400).json({ error: 'يجب تحديد عدد جلسات صحيح للنظام الجولاتي' });
+      }
+    }
+
+    console.log('Creating new class with data:', req.body);
     
     const classObj = new Class(req.body);
     await classObj.save();
     
+    // Populate the class data
+    const populatedClass = await Class.findById(classObj._id)
+      .populate('teacher')
+      .populate('schedule.classroom');
+    
     res.status(201).json({
       message: "تم إنشاء الحصة بنجاح",
-      class: classObj,
+      class: populatedClass,
       existed: false
     });
   } catch (err) {
-    console.error('Error creating class:', err); // Make sure this is logging
-    console.error('Error details:', err.message, err.errors); // Add more details
+    console.error('Error creating class:', err);
+    console.error('Error details:', err.message, err.errors);
     
-    // Return more specific error messages
     let errorMessage = err.message;
     if (err.name === 'ValidationError') {
       errorMessage = 'خطأ في البيانات: ';
@@ -2447,6 +2501,8 @@ app.post('/api/classes',  async (req, res) => {
     res.status(400).json({ error: errorMessage });
   }
 });
+
+
   app.get('/api/classes/:id',  async (req, res) => {
     try {
       const classObj = await Class.findById(req.params.id)
@@ -2498,110 +2554,297 @@ app.post('/api/classes',  async (req, res) => {
     }
   });
 
-  // Enroll Student in Class
-  // Enroll Student in Class
-  app.post('/api/classes/:classId/enroll/:studentId',  async (req, res) => {
+
+  // دالة مساعدة لإنشاء نظام الدفع الشهري
+  async function createMonthlyPaymentSystem(studentId, classId, price, startDate, recordedById, notes = '') {
     try {
-      // 1. Check if class and student exist
-      const classObj = await Class.findById(req.params.classId);
-      const student = await Student.findById(req.params.studentId);
-
-      if (!classObj || !student) {
-          return res.status(404).json({ error: 'الحصة أو الطالب غير موجود' });
-      }
-
-      // 2. Modified condition to allow enrollment in classes with no academic year
-      const isAcademicYearMatch = (
-          !classObj.academicYear || 
-          classObj.academicYear === 'NS' || 
-          classObj.academicYear === 'غير محدد' ||
-          classObj.academicYear === student.academicYear
-      );
-
-      if (!isAcademicYearMatch) {
-          return res.status(400).json({ 
-              error: `لا يمكن تسجيل الطالب في هذه الحصة بسبب عدم تطابق السنة الدراسية (الحصة: ${classObj.academicYear}, الطالب: ${student.academicYear})`
-          });
-      }
-
-
-      // 2. Add student to class if not already enrolled
-
-      const isEnrolled = classObj.students.includes(req.params.studentId);
-      if (isEnrolled) {
-        return res.status(400).json({ error: 'الطالب مسجل بالفعل في هذه الحصة' });
-      }
-
-      if (!classObj.students.includes(req.params.studentId)) {
-        classObj.students.push(req.params.studentId);
-        await classObj.save();
-      }
-
-      if (!student.classes.includes(req.params.classId)) {
-        student.classes.push(req.params.classId);
-        await student.save();
-      }
-
-      // 4. Create monthly payments for student starting from enrollment date (now)
-      const enrollmentDate = new Date(); // Use current date as enrollment date
-      const currentDate = moment();
-      const endDate = currentDate.clone().add(1, 'year');
-
+      console.log(`[إنشاء شهري] للطالب: ${studentId}, الحصة: ${classId}, السعر: ${price}`);
+      
+      const currentDate = moment(startDate);
       const months = [];
-      let currentDateIter = moment(enrollmentDate); // Start from enrollment date
-
-      while (currentDateIter.isBefore(endDate)) {
-        months.push(currentDateIter.format('YYYY-MM'));
-        currentDateIter.add(1, 'month');
+      
+      // إنشاء 12 دفعة شهرية (سنة كاملة)
+      for (let i = 0; i < 12; i++) {
+        const monthDate = moment(startDate).add(i, 'months');
+        const monthStr = monthDate.format('YYYY-MM');
+        const monthName = monthDate.locale('ar').format('MMMM YYYY');
+        months.push({ month: monthStr, name: monthName });
       }
-
+  
       const createdPayments = [];
       for (const month of months) {
         const paymentExists = await Payment.findOne({
-          student: req.params.studentId,
-          class: req.params.classId,
-          month
+          student: studentId,
+          class: classId,
+          month: month.month
         });
-
+  
         if (!paymentExists) {
           const payment = new Payment({
-            student: req.params.studentId,
-            class: req.params.classId,
-            amount: classObj.price,
-            month,
-            status: moment(month).isBefore(currentDate, 'month') ? 'late' : 'pending',
-            recordedBy: req.user.id
+            student: studentId,
+            class: classId,
+            amount: price,
+            month: month.name,
+            monthCode: month.month,
+            status: moment(month.month, 'YYYY-MM').isBefore(moment(), 'month') ? 'late' : 'pending',
+            recordedBy: recordedById,
+            paymentMethod: 'cash',
+            notes: notes || `دفعة شهرية لشهر ${month.name}`
           });
-
+  
           await payment.save();
           createdPayments.push(payment);
-
-          // Record financial transaction (expected income)
+          
+          console.log(`✅ تم إنشاء دفعة شهرية: ${month.name} - ${price} د.ج`);
+          
+          // تسجيل المعاملة المالية
           const transaction = new FinancialTransaction({
             type: 'income',
-            amount: classObj.price,
-            description: `دفعة شهرية متوقعة لطالب ${student.name} في حصة ${classObj.name} لشهر ${month}`,
+            amount: price,
+            description: `دفعة متوقعة للطالب ${studentId} في الحصة ${classId} لشهر ${month.name}`,
             category: 'tuition',
-            recordedBy: req.user.id,
+            recordedBy: recordedById,
             reference: payment._id
           });
           await transaction.save();
         }
       }
-
-      res.json({
-        message: `تم إضافة الطالب ${student.name} للحصة ${classObj.name} بنجاح`,
-        class: classObj,
-        payments: await Payment.find({
-          student: req.params.studentId,
-          class: req.params.classId
-        }).sort({ month: 1 })
-      });
+      
+      return {
+        success: true,
+        type: 'monthly',
+        payments: createdPayments,
+        months: months.length,
+        totalAmount: price * months.length,
+        message: `تم إنشاء ${createdPayments.length} دفعة شهرية`
+      };
     } catch (err) {
-      res.status(400).json({ error: err.message });
+      console.error('❌ خطأ في إنشاء الدفعات الشهرية:', err);
+      return {
+        success: false,
+        error: err.message
+      };
     }
-  });
+  }
+  
+// دالة مساعدة لإنشاء نظام الجولات
+async function createRoundPaymentSystem(studentId, classId, price, roundSettings, startDate, recordedById, notes = '') {
+  try {
+    console.log(`[إنشاء جولات] للطالب: ${studentId}, الحصة: ${classId}`);
+    
+    const { sessionCount = 8, sessionDuration = 2, breakBetweenSessions = 0 } = roundSettings;
+    
+    // حساب السعر لكل جلسة
+    const sessionPrice = Math.round(price / sessionCount);
+    const totalAmount = sessionPrice * sessionCount;
+    
+    // حساب تواريخ الجلسات
+    const sessions = [];
+    let currentSessionDate = moment(startDate);
+    
+    for (let i = 1; i <= sessionCount; i++) {
+      sessions.push({
+        sessionNumber: i,
+        date: currentSessionDate.toDate(),
+        price: sessionPrice,
+        status: 'pending',
+        notes: `الجلسة ${i} من ${sessionCount}`
+      });
+      
+      // الانتقال للجلسة التالية
+      currentSessionDate.add(sessionDuration + breakBetweenSessions, 'hours');
+    }
+    
+    const endDate = currentSessionDate.toDate();
+    
+    // إنشاء سجل الجولة
+    const roundPayment = new RoundPayment({
+      student: studentId,
+      class: classId,
+      roundNumber: `RND-${Date.now().toString().slice(-6)}`,
+      sessionCount: sessionCount,
+      sessionPrice: sessionPrice,
+      totalAmount: totalAmount,
+      startDate: startDate,
+      endDate: endDate,
+      sessions: sessions,
+      status: 'pending',
+      recordedBy: recordedById,
+      notes: notes || `نظام جولات: ${sessionCount} جلسة`
+    });
+    
+    await roundPayment.save();
+    
+    // إنشاء دفعة واحدة للجولة
+    const payment = new Payment({
+      student: studentId,
+      class: classId,
+      amount: totalAmount,
+      month: `جولة ${roundPayment.roundNumber}`,
+      monthCode: moment().format('YYYY-MM'),
+      status: 'pending',
+      recordedBy: recordedById,
+      paymentMethod: 'cash',
+      notes: `دفعة جولة ${roundPayment.roundNumber} - ${sessionCount} جلسة`
+    });
+    
+    await payment.save();
+    
+    console.log(`✅ تم إنشاء جولة: ${roundPayment.roundNumber} - ${totalAmount} د.ج`);
+    
+    return {
+      success: true,
+      type: 'rounds',
+      roundId: roundPayment._id,
+      roundNumber: roundPayment.roundNumber,
+      sessionCount: sessionCount,
+      totalAmount: totalAmount,
+      paymentId: payment._id,
+      message: `تم إنشاء جولة ${roundPayment.roundNumber} بـ ${sessionCount} جلسة`
+    };
+  } catch (err) {
+    console.error('❌ خطأ في إنشاء نظام الجولات:', err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+}
 
+  // Enroll Student in Class
+  // Enroll Student in Class
+// في server.js، تحديث نقطة النهاية /api/classes/:classId/enroll/:studentId
+// في نقطة /api/classes/:classId/enroll/:studentId
+app.post('/api/classes/:classId/enroll/:studentId',  async (req, res) => {
+  try {
+    // 1. Check if class and student exist
+    const classObj = await Class.findById(req.params.classId);
+    const student = await Student.findById(req.params.studentId);
+
+    if (!classObj || !student) {
+        return res.status(404).json({ error: 'الحصة أو الطالب غير موجود' });
+    }
+
+    // 2. التحقق من تطابق السنة الدراسية
+    const isAcademicYearMatch = (
+        !classObj.academicYear || 
+        classObj.academicYear === 'NS' || 
+        classObj.academicYear === 'غير محدد' ||
+        classObj.academicYear === student.academicYear
+    );
+
+    if (!isAcademicYearMatch) {
+        return res.status(400).json({ 
+            error: `لا يمكن تسجيل الطالب في هذه الحصة بسبب عدم تطابق السنة الدراسية (الحصة: ${classObj.academicYear}, الطالب: ${student.academicYear})`
+        });
+    }
+
+    // 3. التحقق من التسجيل المسبق
+    const isEnrolled = classObj.students.includes(req.params.studentId);
+    if (isEnrolled) {
+      return res.status(400).json({ error: 'الطالب مسجل بالفعل في هذه الحصة' });
+    }
+
+    // 4. تسجيل الطالب في الحصة
+    if (!classObj.students.includes(req.params.studentId)) {
+      classObj.students.push(req.params.studentId);
+      await classObj.save();
+    }
+
+    if (!student.classes.includes(req.params.classId)) {
+      student.classes.push(req.params.classId);
+      await student.save();
+    }
+
+    // 5. إنشاء نظام الدفع تلقائيًا بناءً على نوع النظام
+    const enrollmentDate = new Date();
+    const createdPaymentSystems = [];
+    
+    if (classObj.paymentSystem === 'monthly') {
+      // إنشاء نظام الدفع الشهري
+      const monthlyResult = await createMonthlyPaymentSystem(
+        student._id,
+        classObj._id,
+        classObj.price,
+        enrollmentDate,
+        req.user.id
+      );
+      createdPaymentSystems.push(monthlyResult);
+      
+    } else if (classObj.paymentSystem === 'rounds') {
+      // إنشاء نظام الجولات
+      const roundResult = await createRoundPaymentSystem(
+        student._id,
+        classObj._id,
+        classObj.price,
+        classObj.roundSettings || {},
+        enrollmentDate,
+        req.user.id
+      );
+      createdPaymentSystems.push(roundResult);
+    }
+
+    res.json({
+      message: `تم إضافة الطالب ${student.name} للحصة ${classObj.name} بنجاح`,
+      class: classObj,
+      paymentSystems: createdPaymentSystems
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+async function createAutoPaymentSystem(studentId, classObj, enrollmentDate, recordedById) {
+  try {
+    console.log(`[نظام تلقائي] إنشاء دفعات للطالب ${studentId} في حصة ${classObj.name}`);
+    
+    const notes = `تسجيل تلقائي في حصة ${classObj.name}`;
+    
+    if (classObj.paymentSystem === 'monthly') {
+      return await createMonthlyPaymentSystem(
+        studentId,
+        classObj._id,
+        classObj.price,
+        enrollmentDate,
+        recordedById,
+        notes
+      );
+    } 
+    else if (classObj.paymentSystem === 'rounds') {
+      const roundSettings = classObj.roundSettings || {
+        sessionCount: 8,
+        sessionDuration: 2,
+        breakBetweenSessions: 0
+      };
+      
+      return await createRoundPaymentSystem(
+        studentId,
+        classObj._id,
+        classObj.price,
+        roundSettings,
+        enrollmentDate,
+        recordedById,
+        notes
+      );
+    }
+    else {
+      // النظام الافتراضي: شهري
+      return await createMonthlyPaymentSystem(
+        studentId,
+        classObj._id,
+        classObj.price,
+        enrollmentDate,
+        recordedById,
+        notes
+      );
+    }
+  } catch (err) {
+    console.error('❌ خطأ في النظام التلقائي:', err);
+    return {
+      success: false,
+      error: err.message
+    };
+  }
+}
   // Unenroll Student from Class
   app.delete('/api/classes/:classId/unenroll/:studentId',  async (req, res) => {
     try {
@@ -2632,153 +2875,299 @@ app.post('/api/classes',  async (req, res) => {
 
   // API للتسجيل الجماعي للطالب في عدة حصص
 // API للتسجيل الجماعي للطالب في عدة حصص
+// التسجيل الجماعي مع إنشاء أنظمة الدفع تلقائياً
 app.post('/api/students/:studentId/enroll-multiple',  async (req, res) => {
   try {
-      const { classIds } = req.body;
-      
-      const studentId = req.params.studentId;
+    const { classIds, roundSettings } = req.body;
+    const studentId = req.params.studentId;
+    const recordedById = req.user.id;
 
-      // التحقق من وجود الطالب
-      const student = await Student.findById(studentId);
-      if (!student) {
-          return res.status(404).json({ error: 'الطالب غير موجود' });
-      }
+    console.log(`=== بدء التسجيل الجماعي ===`);
+    console.log(`الطالب: ${studentId}`);
+    console.log(`الحصص: ${classIds}`);
+    console.log(`المسجل: ${recordedById}`);
 
-      const results = {
-          successful: [],
-          failed: []
-      };
-
-      // تسجيل الطالب في كل حصة على حدة
-      for (const classId of classIds) {
-          try {
-              const classObj = await Class.findById(classId);
-              if (!classObj) {
-                  results.failed.push({
-                      classId: classId,
-                      error: 'الحصة غير موجودة'
-                  });
-                  continue;
-              }
-
-              // التحقق من توافق السنة الدراسية
-              const isAcademicYearMatch = (
-                  !classObj.academicYear || 
-                  classObj.academicYear === 'NS' || 
-                  classObj.academicYear === 'غير محدد' ||
-                  classObj.academicYear === student.academicYear
-              );
-
-              if (!isAcademicYearMatch) {
-                  results.failed.push({
-                      classId: classId,
-                      className: classObj.name,
-                      error: `عدم تطابق السنة الدراسية (الحصة: ${classObj.academicYear}, الطالب: ${student.academicYear})`
-                  });
-                  continue;
-              }
-
-              // التحقق إذا كان الطالب مسجلاً مسبقاً
-              const isEnrolled = classObj.students.includes(studentId);
-              if (isEnrolled) {
-                  results.failed.push({
-                      classId: classId,
-                      className: classObj.name,
-                      error: 'الطالب مسجل مسبقاً في هذه الحصة'
-                  });
-                  continue;
-              }
-
-              // إضافة الطالب للحصة
-              classObj.students.push(studentId);
-              await classObj.save();
-
-              // إضافة الحصة للطالب
-              if (!student.classes.includes(classId)) {
-                  student.classes.push(classId);
-              }
-
-              // إنشاء مدفوعات شهرية
-              const enrollmentDate = new Date();
-              const currentDate = moment();
-              const endDate = currentDate.clone().add(1, 'year');
-
-              const months = [];
-              let currentDateIter = moment(enrollmentDate);
-
-              while (currentDateIter.isBefore(endDate)) {
-                  months.push(currentDateIter.format('YYYY-MM'));
-                  currentDateIter.add(1, 'month');
-              }
-
-              for (const month of months) {
-                  const paymentExists = await Payment.findOne({
-                      student: studentId,
-                      class: classId,
-                      month
-                  });
-
-                  if (!paymentExists) {
-                      const payment = new Payment({
-                          student: studentId,
-                          class: classId,
-                          amount: classObj.price,
-                          month,
-                          status: moment(month).isBefore(currentDate, 'month') ? 'late' : 'pending',
-                          recordedBy: req.user.id
-                      });
-
-                      await payment.save();
-
-                      // تسجيل المعاملة المالية
-                      const transaction = new FinancialTransaction({
-                          type: 'income',
-                          amount: classObj.price,
-                          description: `دفعة شهرية متوقعة لطالب ${student.name} في حصة ${classObj.name} لشهر ${month}`,
-                          category: 'tuition',
-                          recordedBy: req.user.id,
-                          reference: payment._id
-                      });
-                      await transaction.save();
-                  }
-              }
-
-              results.successful.push({
-                  classId: classId,
-                  className: classObj.name,
-                  message: 'تم التسجيل بنجاح'
-              });
-
-          } catch (error) {
-              results.failed.push({
-                  classId: classId,
-                  error: error.message
-              });
-          }
-      }
-
-      // حفظ التغييرات على الطالب
-      await student.save();
-
-      res.json({
-          message: `تم معالجة ${classIds.length} حصة`,
-          student: {
-              id: student._id,
-              name: student.name
-          },
-          results: results,
-          summary: {
-              total: classIds.length,
-              successful: results.successful.length,
-              failed: results.failed.length
-          }
+    // التحقق من وجود الطالب
+    const student = await Student.findById(studentId);
+    if (!student) {
+      console.log('❌ الطالب غير موجود');
+      return res.status(404).json({ 
+        success: false,
+        error: 'الطالب غير موجود' 
       });
+    }
+
+    const results = {
+      successful: [],
+      failed: [],
+      paymentSystems: []
+    };
+
+    for (const classId of classIds) {
+      try {
+        console.log(`\n--- معالجة الحصة ${classId} ---`);
+        
+        // الحصول على بيانات الحصة
+        const classObj = await Class.findById(classId)
+          .populate('teacher')
+          .populate('students');
+        
+        if (!classObj) {
+          console.log(`❌ الحصة غير موجودة: ${classId}`);
+          results.failed.push({
+            classId: classId,
+            error: 'الحصة غير موجودة'
+          });
+          continue;
+        }
+
+        console.log(`الحصة: ${classObj.name}, السعر: ${classObj.price}, النظام: ${classObj.paymentSystem}`);
+
+        // التحقق من التسجيل المسبق
+        const isEnrolled = classObj.students.some(s => s._id.toString() === studentId);
+        if (isEnrolled) {
+          console.log(`⚠️ الطالب مسجل مسبقاً`);
+          results.failed.push({
+            classId: classId,
+            className: classObj.name,
+            error: 'الطالب مسجل مسبقاً في هذه الحصة'
+          });
+          continue;
+        }
+
+        // إضافة الطالب للحصة
+        classObj.students.push(studentId);
+        await classObj.save();
+        console.log(`✅ تم إضافة الطالب للحصة`);
+
+        // إضافة الحصة للطالب
+        if (!student.classes.includes(classId)) {
+          student.classes.push(classId);
+        }
+
+        // إنشاء نظام الدفع التلقائي
+        const enrollmentDate = new Date();
+        console.log(`🔄 إنشاء نظام الدفع...`);
+        
+        let paymentResult;
+        
+        if (classObj.paymentSystem === 'rounds' && roundSettings) {
+          // استخدام إعدادات الجولات المخصصة
+          paymentResult = await createRoundPaymentSystem(
+            studentId,
+            classId,
+            classObj.price,
+            roundSettings,
+            enrollmentDate,
+            recordedById,
+            `تسجيل في حصة ${classObj.name}`
+          );
+        } else {
+          // النظام العادي (شهري أو جولات بإعدادات الحصة)
+          paymentResult = await createAutoPaymentSystem(
+            studentId,
+            classObj,
+            enrollmentDate,
+            recordedById
+          );
+        }
+
+        if (paymentResult.success) {
+          results.paymentSystems.push({
+            classId: classId,
+            className: classObj.name,
+            type: paymentResult.type,
+            result: paymentResult
+          });
+          console.log(`✅ تم إنشاء نظام الدفع: ${paymentResult.message}`);
+        } else {
+          console.log(`⚠️ فشل إنشاء نظام الدفع: ${paymentResult.error}`);
+        }
+
+        results.successful.push({
+          classId: classId,
+          className: classObj.name,
+          teacher: classObj.teacher?.name,
+          price: classObj.price,
+          paymentSystem: classObj.paymentSystem,
+          message: 'تم التسجيل وإنشاء نظام الدفع بنجاح',
+          paymentDetails: paymentResult
+        });
+
+      } catch (error) {
+        console.error(`❌ خطأ في معالجة الحصة ${classId}:`, error.message);
+        results.failed.push({
+          classId: classId,
+          error: error.message
+        });
+      }
+    }
+
+    // حفظ التغييرات على الطالب
+    await student.save();
+    console.log(`✅ تم حفظ بيانات الطالب`);
+
+    // استجابة مفصلة
+    const response = {
+      success: true,
+      message: `تم معالجة ${classIds.length} حصة`,
+      student: {
+        id: student._id,
+        name: student.name,
+        studentId: student.studentId
+      },
+      results: results,
+      summary: {
+        total: classIds.length,
+        successful: results.successful.length,
+        failed: results.failed.length,
+        paymentSystemsCreated: results.paymentSystems.length,
+        totalMonthlyPayments: results.paymentSystems
+          .filter(p => p.type === 'monthly')
+          .reduce((sum, p) => sum + (p.result.payments?.length || 0), 0),
+        totalRoundsCreated: results.paymentSystems
+          .filter(p => p.type === 'rounds')
+          .length
+      },
+      timestamp: new Date()
+    };
+
+    console.log(`\n=== النتائج النهائية ===`);
+    console.log(JSON.stringify(response.summary, null, 2));
+
+    res.json(response);
 
   } catch (err) {
-      res.status(500).json({ error: err.message });
+    console.error('❌ خطأ في التسجيل الجماعي:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message,
+      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  }
+});
+// الحصول على جميع أنظمة الدفع للطالب
+app.get('/api/students/:studentId/payment-systems',  async (req, res) => {
+  try {
+    const studentId = req.params.studentId;
+    
+    console.log(`جلب أنظمة الدفع للطالب: ${studentId}`);
+    
+    // 1. المدفوعات الشهرية
+    const monthlyPayments = await Payment.find({ 
+      student: studentId 
+    })
+    .populate('class', 'name subject price')
+    .populate('recordedBy', 'username fullName')
+    .sort({ monthCode: 1 });
+    
+    // 2. الجولات
+    const roundPayments = await RoundPayment.find({ 
+      student: studentId 
+    })
+    .populate('class', 'name subject price')
+    .populate('recordedBy', 'username fullName')
+    .sort({ startDate: -1 });
+    
+    // 3. تجميع المدفوعات الشهرية حسب الحالة
+    const monthlySummary = {
+      all: monthlyPayments,
+      pending: monthlyPayments.filter(p => p.status === 'pending'),
+      late: monthlyPayments.filter(p => p.status === 'late'),
+      paid: monthlyPayments.filter(p => p.status === 'paid'),
+      totalAmount: monthlyPayments.reduce((sum, p) => sum + p.amount, 0),
+      totalPending: monthlyPayments.filter(p => p.status === 'pending').reduce((sum, p) => sum + p.amount, 0),
+      totalLate: monthlyPayments.filter(p => p.status === 'late').reduce((sum, p) => sum + p.amount, 0),
+      totalPaid: monthlyPayments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0)
+    };
+    
+    // 4. تجميع الجولات حسب الحالة
+    const roundSummary = {
+      all: roundPayments,
+      pending: roundPayments.filter(r => r.status === 'pending'),
+      paid: roundPayments.filter(r => r.status === 'paid'),
+      cancelled: roundPayments.filter(r => r.status === 'cancelled'),
+      totalAmount: roundPayments.reduce((sum, r) => sum + r.totalAmount, 0)
+    };
+    
+    res.json({
+      success: true,
+      monthly: monthlySummary,
+      rounds: roundSummary,
+      summary: {
+        totalMonthlyPayments: monthlyPayments.length,
+        totalRounds: roundPayments.length,
+        totalPendingAmount: monthlySummary.totalPending + roundSummary.pending.reduce((sum, r) => sum + r.totalAmount, 0),
+        totalPaidAmount: monthlySummary.totalPaid + roundSummary.paid.reduce((sum, r) => sum + r.totalAmount, 0),
+        totalAllAmount: monthlySummary.totalAmount + roundSummary.totalAmount
+      }
+    });
+    
+  } catch (err) {
+    console.error('خطأ في جلب أنظمة الدفع:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
   }
 });
 
+// نقطة نهاية لاختبار إنشاء نظام الدفع
+app.post('/api/test/create-payments', authenticate(['admin', 'accountant']), async (req, res) => {
+  try {
+    const { studentId, classId, type } = req.body;
+    
+    const student = await Student.findById(studentId);
+    const classObj = await Class.findById(classId);
+    
+    if (!student || !classObj) {
+      return res.status(404).json({ error: 'الطالب أو الحصة غير موجود' });
+    }
+    
+    let result;
+    const recordedById = req.user.id;
+    
+    if (type === 'monthly') {
+      result = await createMonthlyPaymentSystem(
+        studentId,
+        classId,
+        classObj.price,
+        new Date(),
+        recordedById,
+        'دفعات شهرية تجريبية'
+      );
+    } else if (type === 'rounds') {
+      result = await createRoundPaymentSystem(
+        studentId,
+        classId,
+        classObj.price,
+        { sessionCount: 8, sessionDuration: 2 },
+        new Date(),
+        recordedById,
+        'جولة تجريبية'
+      );
+    } else {
+      result = await createAutoPaymentSystem(
+        studentId,
+        classObj,
+        new Date(),
+        recordedById
+      );
+    }
+    
+    res.json({
+      success: true,
+      message: 'تم الاختبار بنجاح',
+      result: result
+    });
+    
+  } catch (err) {
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
   // Attendance
   app.get('/api/attendance',  async (req, res) => {
     try {
@@ -3105,6 +3494,139 @@ app.get('/api/students/:studentId/monthly-attendance', async (req, res) => {
   });
 
 
+// Payment Systems Routes
+app.get('/api/payment-systems/monthly/student/:studentId', async (req, res) => {
+  try {
+    const monthlySystems = await MonthlyPayment.find({ 
+      student: req.params.studentId 
+    })
+      .populate('class')
+      .populate('student')
+      .sort({ startDate: -1 });
+    
+    res.json(monthlySystems);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// الحصول على جولات الطالب
+app.get('/api/payment-systems/rounds/student/:studentId',  async (req, res) => {
+  try {
+    const rounds = await RoundPayment.find({ 
+      student: req.params.studentId 
+    })
+      .populate('class', 'name subject price')
+      .populate('student', 'name studentId')
+      .populate('recordedBy', 'username fullName')
+      .sort({ startDate: -1 });
+    
+    // تحديث حالة الجولات بناءً على التاريخ
+    const now = new Date();
+    const updatedRounds = rounds.map(round => {
+      const roundObj = round.toObject();
+      const endDate = new Date(round.endDate);
+      const startDate = new Date(round.startDate);
+      
+      if (round.status === 'paid') {
+        roundObj.statusText = 'ممتازة';
+        roundObj.statusClass = 'badge bg-success';
+      } else if (now > endDate && round.status !== 'paid') {
+        roundObj.statusText = 'منتهية';
+        roundObj.statusClass = 'badge bg-danger';
+      } else if (now >= startDate && now <= endDate && round.status !== 'paid') {
+        roundObj.statusText = 'متأخرة';
+        roundObj.statusClass = 'badge bg-warning';
+      } else if (now < startDate) {
+        roundObj.statusText = 'قادمة';
+        roundObj.statusClass = 'badge bg-info';
+      }
+      
+      return roundObj;
+    });
+    
+    res.json({
+      success: true,
+      rounds: updatedRounds,
+      summary: {
+        total: updatedRounds.length,
+        pending: updatedRounds.filter(r => r.status === 'pending').length,
+        paid: updatedRounds.filter(r => r.status === 'paid').length,
+        totalAmount: updatedRounds.reduce((sum, r) => sum + r.totalAmount, 0)
+      }
+    });
+  } catch (err) {
+    console.error('Error loading rounds:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+
+// دفع جولة
+app.put('/api/payment-systems/rounds/:id/pay',  async (req, res) => {
+  try {
+    const { paymentMethod, paymentDate, notes } = req.body;
+    
+    const roundPayment = await RoundPayment.findById(req.params.id)
+      .populate('student')
+      .populate('class');
+    
+    if (!roundPayment) {
+      return res.status(404).json({ error: 'الجولة غير موجودة' });
+    }
+    
+    // تحديث حالة الجولة
+    roundPayment.status = 'paid';
+    roundPayment.sessions.forEach(session => {
+      session.status = 'completed';
+    });
+    
+    await roundPayment.save();
+    
+    // البحث عن الدفعة المرتبطة وتحديثها
+    const payment = await Payment.findOne({
+      student: roundPayment.student._id,
+      class: roundPayment.class?._id,
+      month: `جولة ${roundPayment.roundNumber}`
+    });
+    
+    if (payment) {
+      payment.status = 'paid';
+      payment.paymentDate = paymentDate || new Date();
+      payment.paymentMethod = paymentMethod || 'cash';
+      payment.notes = notes || payment.notes;
+      await payment.save();
+      
+      // تسجيل المعاملة المالية
+      const transaction = new FinancialTransaction({
+        type: 'income',
+        amount: roundPayment.totalAmount,
+        description: `دفعة جولة ${roundPayment.roundNumber} للطالب ${roundPayment.student.name}`,
+        category: 'tuition',
+        recordedBy: req.user.id,
+        reference: roundPayment._id
+      });
+      
+      await transaction.save();
+    }
+    
+    res.json({
+      success: true,
+      message: 'تم دفع الجولة بنجاح',
+      roundPayment: roundPayment,
+      payment: payment
+    });
+  } catch (err) {
+    console.error('Error paying round:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
 
   // في ملف الخادم (server.js أو app.js)
 app.put('/api/payments/:id/cancel',  async (req, res) => {
@@ -3200,6 +3722,944 @@ app.get('/api/payments/count', async (req, res) => {
 });
 // Get multiple payments by IDs (for printing multiple receipts)
 // Get multiple payments by IDs (for printing multiple receipts)
+// إنشاء دفعة جديدة للطالب
+app.post('/api/payments',  async (req, res) => {
+  try {
+    const { student, class: classId, amount, month, paymentMethod, notes } = req.body;
+    
+    console.log('إنشاء دفعة جديدة:', req.body);
+    
+    // التحقق من البيانات المطلوبة
+    if (!student || !amount || !month) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'البيانات ناقصة: يجب إدخال الطالب والمبلغ والشهر' 
+      });
+    }
+    
+    // التحقق من وجود الطالب
+    const studentData = await Student.findById(student);
+    if (!studentData) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الطالب غير موجود' 
+      });
+    }
+    
+    // إنشاء رقم فاتورة
+    const invoiceNumber = `INV-${Date.now().toString().slice(-8)}`;
+    
+    // إنشاء الدفعة
+    const payment = new Payment({
+      student: student,
+      class: classId || null,
+      amount: amount,
+      month: month,
+      monthCode: moment().format('YYYY-MM'),
+      status: 'pending',
+      paymentMethod: paymentMethod || 'cash',
+      invoiceNumber: invoiceNumber,
+      recordedBy: req.user.id,
+      notes: notes || ''
+    });
+    
+    await payment.save();
+    
+    // تسجيل المعاملة المالية
+    const transaction = new FinancialTransaction({
+      type: 'income',
+      amount: amount,
+      description: notes || `دفعة جديدة للطالب ${studentData.name} لشهر ${month}`,
+      category: 'tuition',
+      recordedBy: req.user.id,
+      reference: payment._id,
+      student: student
+    });
+    
+    await transaction.save();
+    
+    // الحصول على الدفعة مع البيانات المترابطة
+    const populatedPayment = await Payment.findById(payment._id)
+      .populate('student', 'name studentId')
+      .populate('class', 'name subject')
+      .populate('recordedBy', 'username fullName');
+    
+    res.status(201).json({
+      success: true,
+      message: 'تم إنشاء الدفعة بنجاح',
+      payment: populatedPayment,
+      invoiceNumber: invoiceNumber
+    });
+    
+  } catch (err) {
+    console.error('❌ خطأ في إنشاء الدفعة:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+// Add these endpoints near the other dashboard/statistics endpoints in your server.js file
+
+// ==============================================
+// DASHBOARD ENDPOINTS
+// ==============================================
+
+// 1. Daily Statistics - Aggregated endpoint
+app.get('/api/dashboard/daily-stats',  async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Get daily income
+    const dailyIncome = await Payment.aggregate([
+      {
+        $match: {
+          paymentDate: { $gte: today, $lt: tomorrow },
+          status: 'paid'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    // Get today's expenses
+    const todayExpenses = await Expense.aggregate([
+      {
+        $match: {
+          date: { $gte: today, $lt: tomorrow },
+          status: 'paid'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    // Get today's classes count
+    const todayClassesCount = await LiveClass.countDocuments({
+      date: { $gte: today, $lt: tomorrow },
+      status: { $in: ['scheduled', 'ongoing'] }
+    });
+
+    // Get today's attendance stats
+    const todayAttendance = await LiveClass.aggregate([
+      {
+        $match: {
+          date: { $gte: today, $lt: tomorrow }
+        }
+      },
+      {
+        $unwind: '$attendance'
+      },
+      {
+        $group: {
+          _id: '$attendance.status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Format attendance stats
+    const attendanceStats = {
+      present: 0,
+      absent: 0,
+      late: 0
+    };
+
+    todayAttendance.forEach(stat => {
+      attendanceStats[stat._id] = stat.count;
+    });
+
+    res.json({
+      success: true,
+      dailyStats: {
+        income: dailyIncome[0]?.total || 0,
+        expenses: todayExpenses[0]?.total || 0,
+        profit: (dailyIncome[0]?.total || 0) - (todayExpenses[0]?.total || 0),
+        totalClasses: todayClassesCount || 0
+      },
+      currentStudents: attendanceStats
+    });
+  } catch (err) {
+    console.error('Error fetching dashboard stats:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 2. Today's Classes
+app.get('/api/live-classes/today',  async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayClasses = await LiveClass.find({
+      date: { $gte: today, $lt: tomorrow }
+    })
+    .populate('class', 'name subject price')
+    .populate('teacher', 'name')
+    .populate('classroom', 'name')
+    .sort({ startTime: 1 });
+
+    // Transform data for frontend
+    const formattedClasses = todayClasses.map(lc => ({
+      _id: lc._id,
+      name: lc.class?.name || 'غير محدد',
+      subject: lc.class?.subject || 'غير محدد',
+      teacher: lc.teacher,
+      time: lc.startTime,
+      classroom: lc.classroom,
+      isScheduled: lc.status !== 'scheduled',
+      studentsCount: lc.attendance?.length || 0,
+      status: lc.status
+    }));
+
+    res.json(formattedClasses);
+  } catch (err) {
+    console.error('Error fetching today classes:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 3. Late Students (Students with pending payments)
+app.get('/api/students/late-payments',  async (req, res) => {
+  try {
+    const lateStudents = await Payment.aggregate([
+      {
+        $match: {
+          status: 'pending',
+          monthCode: { 
+            $lt: new Date().toISOString().slice(0, 7) // Older than current month
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: 'students',
+          localField: 'student',
+          foreignField: '_id',
+          as: 'student'
+        }
+      },
+      {
+        $unwind: '$student'
+      },
+      {
+        $group: {
+          _id: '$student._id',
+          name: { $first: '$student.name' },
+          studentId: { $first: '$student.studentId' },
+          amountDue: { $sum: '$amount' },
+          monthsLate: { $sum: 1 },
+          latestPaymentDate: { $max: '$createdAt' }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          studentId: 1,
+          amountDue: 1,
+          monthsLate: 1,
+          latestPaymentDate: 1
+        }
+      },
+      {
+        $sort: { amountDue: -1 }
+      },
+      {
+        $limit: 20
+      }
+    ]);
+
+    res.json(lateStudents);
+  } catch (err) {
+    console.error('Error fetching late students:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 4. Today's Attendance Stats
+app.get('/api/attendance/today-stats',  async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const liveClasses = await LiveClass.find({
+      date: { $gte: today, $lt: tomorrow }
+    }).populate('attendance.student');
+
+    const attendanceMap = new Map();
+    let present = 0;
+    let absent = 0;
+    let late = 0;
+
+    // Collect unique students with their latest status
+    liveClasses.forEach(lc => {
+      lc.attendance.forEach(att => {
+        const studentId = att.student._id.toString();
+        
+        // Only count each student once per day (take latest status)
+        if (!attendanceMap.has(studentId) || 
+            new Date(att.timestamp || att.joinedAt) > attendanceMap.get(studentId).timestamp) {
+          
+          attendanceMap.set(studentId, {
+            student: att.student,
+            status: att.status,
+            timestamp: new Date(att.timestamp || att.joinedAt)
+          });
+        }
+      });
+    });
+
+    // Count statuses
+    attendanceMap.forEach(record => {
+      if (record.status === 'present') present++;
+      else if (record.status === 'absent') absent++;
+      else if (record.status === 'late') late++;
+    });
+
+    // Get list of late students
+    const lateStudents = Array.from(attendanceMap.values())
+      .filter(record => record.status === 'late')
+      .map(record => ({
+        _id: record.student._id,
+        name: record.student.name,
+        studentId: record.student.studentId,
+        time: record.timestamp.toLocaleTimeString()
+      }));
+
+    res.json({
+      present,
+      absent,
+      late,
+      late: lateStudents,
+      total: present + absent + late
+    });
+  } catch (err) {
+    console.error('Error fetching today attendance stats:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 5. Schedule a Class (Create Live Class)
+app.post('/api/live-classes/schedule',  async (req, res) => {
+  try {
+    const { classId, date, startTime, endTime, teacherId, classroomId } = req.body;
+
+    // Check if class exists
+    const classObj = await Class.findById(classId)
+      .populate('teacher')
+      .populate('students');
+
+    if (!classObj) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الحصة غير موجودة' 
+      });
+    }
+
+    // Check if already scheduled
+    const existingLiveClass = await LiveClass.findOne({
+      class: classId,
+      date: new Date(date),
+      startTime: startTime
+    });
+
+    if (existingLiveClass) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'الحصة مجدولة مسبقاً' 
+      });
+    }
+
+    // Create attendance records for all students
+    const attendance = classObj.students.map(student => ({
+      student: student._id,
+      status: 'absent', // Default to absent
+      joinedAt: null,
+      leftAt: null
+    }));
+
+    // Create live class
+    const liveClass = new LiveClass({
+      class: classId,
+      date: new Date(date),
+      startTime: startTime || '08:00',
+      endTime: endTime || '10:00',
+      teacher: teacherId || classObj.teacher?._id,
+      classroom: classroomId,
+      attendance: attendance,
+      status: 'scheduled',
+      createdBy: req.user.id
+    });
+
+    await liveClass.save();
+
+    // Populate for response
+    const populatedLiveClass = await LiveClass.findById(liveClass._id)
+      .populate('class')
+      .populate('teacher')
+      .populate('classroom')
+      .populate('attendance.student');
+
+    res.json({
+      success: true,
+      message: 'تم جدولة الحصة بنجاح',
+      liveClass: populatedLiveClass
+    });
+  } catch (err) {
+    console.error('Error scheduling class:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 6. Today's Classes Count
+app.get('/api/live-classes/today-count',  async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const count = await LiveClass.countDocuments({
+      date: { $gte: today, $lt: tomorrow },
+      status: { $in: ['scheduled', 'ongoing'] }
+    });
+
+    res.json({ 
+      success: true,
+      count 
+    });
+  } catch (err) {
+    console.error('Error counting today classes:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 7. Today's Expenses
+app.get('/api/accounting/today-expenses',  async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const expenses = await Expense.aggregate([
+      {
+        $match: {
+          date: { $gte: today, $lt: tomorrow },
+          status: 'paid'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    res.json({ 
+      success: true,
+      total: expenses[0]?.total || 0,
+      count: expenses[0]?.count || 0
+    });
+  } catch (err) {
+    console.error('Error fetching today expenses:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 8. Send Payment Reminder
+app.post('/api/students/:id/send-reminder',  async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    const { message } = req.body;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الطالب غير موجود' 
+      });
+    }
+
+    // Create notification message
+    const notification = new Message({
+      sender: req.user.id,
+      recipients: [{
+        student: studentId,
+        parentPhone: student.parentPhone,
+        parentEmail: student.parentEmail
+      }],
+      content: message || `تنبيه: لديك دفعات متأخرة. يرجى التواصل مع الإدارة.`,
+      messageType: 'individual',
+      status: 'sent'
+    });
+
+    await notification.save();
+
+    // Send SMS if phone number exists
+    if (student.parentPhone) {
+      try {
+        const smsContent = `عزيزي ولي أمر الطالب ${student.name}: لديك دفعات متأخرة. يرجى التواصل مع إدارة المدرسة.`;
+        await smsGateway.send(student.parentPhone, smsContent);
+      } catch (smsErr) {
+        console.error('Failed to send SMS:', smsErr);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'تم إرسال التذكير بنجاح'
+    });
+  } catch (err) {
+    console.error('Error sending reminder:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 9. Record Attendance
+app.post('/api/attendance/record',  async (req, res) => {
+  try {
+    const { studentId, status, timestamp } = req.body;
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الطالب غير موجود' 
+      });
+    }
+
+    // Find today's live classes for this student
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const liveClasses = await LiveClass.find({
+      date: { $gte: today, $lt: tomorrow },
+      'class': { $in: student.classes }
+    });
+
+    if (liveClasses.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'لا توجد حصص للطالب اليوم' 
+      });
+    }
+
+    // Record attendance for each class
+    const attendanceRecords = [];
+    
+    for (const liveClass of liveClasses) {
+      const attendanceIndex = liveClass.attendance.findIndex(
+        att => att.student.toString() === studentId
+      );
+
+      if (attendanceIndex !== -1) {
+        liveClass.attendance[attendanceIndex].status = status || 'present';
+        liveClass.attendance[attendanceIndex].joinedAt = timestamp || new Date();
+        
+        // If status is present, mark current time
+        if (status === 'present') {
+          liveClass.attendance[attendanceIndex].joinedAt = timestamp || new Date();
+        }
+      } else {
+        // Add new attendance record
+        liveClass.attendance.push({
+          student: studentId,
+          status: status || 'present',
+          joinedAt: timestamp || new Date(),
+          leftAt: null
+        });
+      }
+
+      await liveClass.save();
+      attendanceRecords.push(liveClass._id);
+    }
+
+    // Send notification to parent
+    if (student.parentPhone) {
+      try {
+        const smsContent = `تم تسجيل ${status === 'present' ? 'حضور' : status === 'absent' ? 'غياب' : 'تأخير'} الطالب ${student.name} في الحصص اليومية.`;
+        await smsGateway.send(student.parentPhone, smsContent);
+      } catch (smsErr) {
+        console.error('Failed to send SMS:', smsErr);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `تم تسجيل ${status === 'present' ? 'الحضور' : status === 'absent' ? 'الغياب' : 'التأخير'} بنجاح`,
+      student: {
+        name: student.name,
+        studentId: student.studentId
+      },
+      recordedClasses: attendanceRecords.length
+    });
+  } catch (err) {
+    console.error('Error recording attendance:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 10. Notifications for Dashboard
+app.get('/api/notifications',  async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Get recent messages
+    const recentMessages = await Message.find({
+      sentAt: { $gte: today }
+    })
+    .populate('sender', 'username fullName')
+    .populate('recipients.student', 'name studentId')
+    .sort({ sentAt: -1 })
+    .limit(20);
+
+    // Get pending payments count
+    const pendingPaymentsCount = await Payment.countDocuments({
+      status: 'pending',
+      monthCode: { $lt: new Date().toISOString().slice(0, 7) }
+    });
+
+    // Get upcoming classes count
+    const upcomingClassesCount = await LiveClass.countDocuments({
+      date: { $gte: today },
+      status: 'scheduled'
+    });
+
+    // Get late students count
+    const lateStudentsCount = await Payment.aggregate([
+      {
+        $match: {
+          status: 'pending',
+          monthCode: { $lt: new Date().toISOString().slice(0, 7) }
+        }
+      },
+      {
+        $group: {
+          _id: '$student'
+        }
+      },
+      {
+        $count: 'count'
+      }
+    ]);
+
+    // Format notifications
+    const notifications = [
+      ...recentMessages.map(msg => ({
+        id: msg._id,
+        type: 'info',
+        message: `رسالة ${msg.messageType === 'class' ? 'صفية' : 'فردية'} من ${msg.sender?.fullName}`,
+        timestamp: msg.sentAt,
+        data: {
+          messageId: msg._id,
+          sender: msg.sender?.fullName,
+          type: msg.messageType
+        }
+      })),
+      pendingPaymentsCount > 0 ? {
+        id: 'pending-payments',
+        type: 'warning',
+        message: `لديك ${pendingPaymentsCount} دفعة معلقة`,
+        timestamp: new Date(),
+        data: { count: pendingPaymentsCount }
+      } : null,
+      upcomingClassesCount > 0 ? {
+        id: 'upcoming-classes',
+        type: 'info',
+        message: `لديك ${upcomingClassesCount} حصة قادمة`,
+        timestamp: new Date(),
+        data: { count: upcomingClassesCount }
+      } : null,
+      lateStudentsCount.length > 0 ? {
+        id: 'late-students',
+        type: 'error',
+        message: `هناك ${lateStudentsCount[0]?.count || 0} طالب متأخر في الدفع`,
+        timestamp: new Date(),
+        data: { count: lateStudentsCount[0]?.count || 0 }
+      } : null
+    ].filter(n => n !== null);
+
+    res.json(notifications);
+  } catch (err) {
+    console.error('Error fetching notifications:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 11. Export Daily Report
+app.get('/api/accounting/export-daily-report', authenticate(['admin', 'accountant']), async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Get daily income
+    const dailyIncome = await Payment.aggregate([
+      {
+        $match: {
+          paymentDate: { $gte: today, $lt: tomorrow },
+          status: 'paid'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Get today's expenses
+    const todayExpenses = await Expense.aggregate([
+      {
+        $match: {
+          date: { $gte: today, $lt: tomorrow },
+          status: 'paid'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Get today's classes
+    const todayClasses = await LiveClass.find({
+      date: { $gte: today, $lt: tomorrow }
+    })
+    .populate('class')
+    .populate('teacher')
+    .populate('classroom');
+
+    // Get today's attendance
+    const todayAttendance = await LiveClass.aggregate([
+      {
+        $match: {
+          date: { $gte: today, $lt: tomorrow }
+        }
+      },
+      {
+        $unwind: '$attendance'
+      },
+      {
+        $lookup: {
+          from: 'students',
+          localField: 'attendance.student',
+          foreignField: '_id',
+          as: 'student'
+        }
+      },
+      {
+        $unwind: '$student'
+      },
+      {
+        $group: {
+          _id: {
+            status: '$attendance.status',
+            studentName: '$student.name',
+            studentId: '$student.studentId'
+          },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Create Excel workbook
+    const workbook = new ExcelJS.Workbook();
+    
+    // Summary sheet
+    const summarySheet = workbook.addWorksheet('ملخص اليوم');
+    
+    summarySheet.columns = [
+      { header: 'البند', key: 'item', width: 25 },
+      { header: 'القيمة', key: 'value', width: 20 }
+    ];
+    
+    summarySheet.addRows([
+      { item: 'التاريخ', value: today.toLocaleDateString('ar-EG') },
+      { item: 'إجمالي الإيرادات', value: dailyIncome[0]?.total || 0 },
+      { item: 'إجمالي المصروفات', value: todayExpenses[0]?.total || 0 },
+      { item: 'صافي الربح', value: (dailyIncome[0]?.total || 0) - (todayExpenses[0]?.total || 0) },
+      { item: 'عدد الحصص', value: todayClasses.length }
+    ]);
+    
+    // Attendance sheet
+    const attendanceSheet = workbook.addWorksheet('الحضور والغياب');
+    attendanceSheet.columns = [
+      { header: 'اسم الطالب', key: 'studentName', width: 25 },
+      { header: 'رقم الطالب', key: 'studentId', width: 15 },
+      { header: 'الحالة', key: 'status', width: 15 },
+      { header: 'الحصة', key: 'className', width: 25 }
+    ];
+    
+    // Classes sheet
+    const classesSheet = workbook.addWorksheet('الحصص اليومية');
+    classesSheet.columns = [
+      { header: 'اسم الحصة', key: 'className', width: 25 },
+      { header: 'المادة', key: 'subject', width: 20 },
+      { header: 'الأستاذ', key: 'teacher', width: 20 },
+      { header: 'الوقت', key: 'time', width: 15 },
+      { header: 'القاعة', key: 'classroom', width: 15 },
+      { header: 'الحالة', key: 'status', width: 15 }
+    ];
+    
+    todayClasses.forEach(cls => {
+      classesSheet.addRow({
+        className: cls.class?.name || 'غير محدد',
+        subject: cls.class?.subject || 'غير محدد',
+        teacher: cls.teacher?.name || 'غير محدد',
+        time: cls.startTime,
+        classroom: cls.classroom?.name || 'غير محدد',
+        status: cls.status
+      });
+    });
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=daily-report-${today.toISOString().split('T')[0]}.xlsx`);
+    
+    // Write workbook to response
+    await workbook.xlsx.write(res);
+    res.end();
+    
+  } catch (err) {
+    console.error('Error exporting daily report:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 12. Refresh Dashboard Data
+app.post('/api/dashboard/refresh',  (req, res) => {
+  try {
+    // This endpoint just acknowledges the refresh request
+    // Actual data refresh happens through individual endpoints
+    
+    res.json({
+      success: true,
+      message: 'سيتم تحديث البيانات قريباً',
+      timestamp: new Date()
+    });
+  } catch (err) {
+    console.error('Error refreshing dashboard:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 13. Student Details by Card UID
+app.get('/api/cards/uid/:uid',  async (req, res) => {
+  try {
+    const { uid } = req.params;
+    
+    const card = await Card.findOne({ uid: uid })
+      .populate({
+        path: 'student',
+        populate: [
+          {
+            path: 'classes',
+            populate: [
+              { path: 'teacher', model: 'Teacher' },
+              { path: 'schedule.classroom', model: 'Classroom' }
+            ]
+          }
+        ]
+      });
+
+    if (!card) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'البطاقة غير مسجلة' 
+      });
+    }
+
+    // Get student's pending payments
+    const payments = await Payment.find({
+      student: card.student._id,
+      status: { $in: ['pending', 'late'] }
+    })
+    .populate('class')
+    .sort({ month: 1 });
+
+    res.json({
+      success: true,
+      student: card.student,
+      classes: card.student.classes || [],
+      payments: payments || [],
+      card: {
+        uid: card.uid,
+        issueDate: card.issueDate
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching card data:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
 app.post('/api/payments/bulk', async (req, res) => {
   try {
     const { paymentIds } = req.body;
@@ -3225,102 +4685,96 @@ app.post('/api/payments/bulk', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+
   // Register Payment
   // Register Payment - FIXED VERSION
   // Enhanced payment registration with teacher share calculation
   // تحديث مسار تسجيل الدفع
 // Register Payment - FIXED VERSION - Update to return populated data
-app.put('/api/payments/:id/pay', async (req, res) => {
+// دفع دفعة موجودة
+// دفع دفعة موجودة - FIXED VERSION
+app.put('/api/payments/:id/pay', authenticate(['admin', 'accountant']), async (req, res) => {
   try {
+    const { paymentMethod, paymentDate, notes } = req.body;
+    
+    console.log(`دفع الدفعة ${req.params.id}:`, req.body);
+    console.log('المستخدم المصادق:', req.user); // Debug log
+    
+    // التحقق من أن المستخدم مسجل الدخول
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ 
+        success: false,
+        error: 'يجب تسجيل الدخول أولاً' 
+      });
+    }
+    
     const payment = await Payment.findById(req.params.id)
-      .populate('student')
+      .populate('student', 'name studentId parentPhone')
       .populate({
         path: 'class',
         populate: [
-          { path: 'teacher', model: 'Teacher' },
-          { path: 'schedule.classroom', model: 'Classroom' }
+          { path: 'teacher', model: 'Teacher', select: 'name' }
         ]
       });
-
+    
     if (!payment) {
-      return res.status(404).json({ error: 'الدفعة غير موجودة' });
+      return res.status(404).json({ 
+        success: false,
+        error: 'الدفعة غير موجودة' 
+      });
     }
-
+    
+    // تحديث حالة الدفعة
     payment.status = 'paid';
-    payment.paymentDate = req.body.paymentDate || new Date();
-    payment.paymentMethod = req.body.paymentMethod || 'cash';
-    payment.recordedBy = req.user.id;
-    payment.invoiceNumber = `INV-${Date.now()}`;
-
+    payment.paymentDate = paymentDate || new Date();
+    payment.paymentMethod = paymentMethod || 'cash';
+    payment.invoiceNumber = payment.invoiceNumber || `INV-${Date.now().toString().slice(-8)}`;
+    payment.recordedBy = req.user.id; // استخدم req.user.id هنا
+    
+    if (notes) {
+      payment.notes = notes;
+    }
+    
     await payment.save();
     
     // تسجيل المعاملة المالية (إيراد)
     const transaction = new FinancialTransaction({
       type: 'income',
       amount: payment.amount,
-      description: `دفعة شهرية لطالب ${payment.student.name} في حصة ${payment.class.name} لشهر ${payment.month}`,
+      description: `دفعة شهرية لطالب ${payment.student.name} لشهر ${payment.month}`,
       category: 'tuition',
-      recordedBy: req.user.id,
-      reference: payment._id
+      recordedBy: req.user.id, // استخدم req.user.id هنا أيضاً
+      reference: payment._id,
+      student: payment.student._id
     });
+    
     await transaction.save();
     
-    // إذا لم يتم تسجيل عمولة للأستاذ بعد، قم بتسجيلها
-    if (!payment.commissionRecorded && payment.class.teacher) {
-      // الحصول على نسبة العمولة من إعدادات الأستاذ أو استخدام القيمة الافتراضية
-      const commissionPercentage = payment.class.teacher.salaryPercentage || 0.7;
-      const commissionAmount = payment.amount * commissionPercentage;
-      
-      const commission = new TeacherCommission({
-        teacher: payment.class.teacher._id,
-        student: payment.student._id,
-        class: payment.class._id,
-        month: payment.month,
-        amount: commissionAmount,
-        percentage: commissionPercentage * 100,
-        status: 'pending', // وضع pending حتى يتم الدفع
-        recordedBy: req.user.id
-      });
-      
-      await commission.save();
-      
-      // تحديث سجل الدفع لتوثيق تسجيل العمولة
-      payment.commissionRecorded = true;
-      payment.commissionId = commission._id;
-      await payment.save();
-      
-      // إشعار المحاسب بوجود عمولة جديدة需要 الدفع
-      io.emit('new-commission', { 
-        commissionId: commission._id,
-        teacher: payment.class.teacher.name,
-        amount: commissionAmount,
-        month: payment.month
-      });
-    }
-
-    // Get the updated payment with populated data
-    const updatedPayment = await Payment.findById(req.params.id)
-      .populate('student')
-      .populate({
-        path: 'class',
-        populate: [
-          { path: 'teacher', model: 'Teacher' },
-          { path: 'schedule.classroom', model: 'Classroom' }
-        ]
-      })
-      .populate('recordedBy');
-
+    // إرسال إشعار للمحاسب عن الدفعة المدفوعة
+    io.emit('payment-paid', {
+      paymentId: payment._id,
+      studentName: payment.student.name,
+      amount: payment.amount,
+      month: payment.month,
+      paymentDate: payment.paymentDate
+    });
+    
     res.json({
+      success: true,
       message: `تم تسديد الدفعة بنجاح`,
-      payment: updatedPayment,
+      payment: payment,
       invoiceNumber: payment.invoiceNumber
     });
+    
   } catch (err) {
-    console.error('Payment registration error:', err);
-    res.status(500).json({ error: err.message });
+    console.error('❌ خطأ في دفع الدفعة:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
   }
 });
-
 // في server.js - تحديث endpoint المدفوعات
 app.get('/api/payments', async (req, res) => {
   try {
@@ -3957,40 +5411,121 @@ app.put('/api/payments/:id/amount', async (req, res) => {
 // Add this endpoint in your server.js file, near the other payment endpoints:
 
 // Get payments for a specific student
+// الحصول على مدفوعات الطالب
+// الحصول على جميع مدفوعات الطالب مع تفاصيل كاملة
 app.get('/api/payments/student/:studentId',  async (req, res) => {
   try {
     const { studentId } = req.params;
-    const { status, startDate, endDate } = req.query;
+    const { status, startDate, endDate, limit = 100 } = req.query;
     
-    // Build query
+    console.log(`جلب مدفوعات الطالب: ${studentId}`);
+    
+    // بناء الاستعلام
     const query = { student: studentId };
     
-    if (status) query.status = status;
-    if (startDate || endDate) {
-      query.paymentDate = {};
-      if (startDate) query.paymentDate.$gte = new Date(startDate);
-      if (endDate) query.paymentDate.$lte = new Date(endDate);
+    if (status && status !== 'all') {
+      query.status = status;
     }
     
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) query.createdAt.$lte = new Date(endDate);
+    }
+    
+    // الحصول على المدفوعات مع جميع البيانات
     const payments = await Payment.find(query)
-      .populate('student')
+      .populate({
+        path: 'student',
+        select: 'name studentId parentPhone academicYear'
+      })
       .populate({
         path: 'class',
+        select: 'name subject price paymentSystem',
         populate: [
-          { path: 'teacher', model: 'Teacher' },
-          { path: 'schedule.classroom', model: 'Classroom' }
+          { path: 'teacher', model: 'Teacher', select: 'name' },
+          { path: 'schedule.classroom', model: 'Classroom', select: 'name' }
         ]
       })
-      .populate('recordedBy')
-      .sort({ month: -1, paymentDate: -1 });
+      .populate('recordedBy', 'username fullName')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
     
-    res.json(payments);
+    console.log(`تم العثور على ${payments.length} دفعة للطالب ${studentId}`);
+    
+    // إضافة بيانات إضافية لكل دفعة
+    const enhancedPayments = payments.map(payment => {
+      const paymentObj = payment.toObject();
+      
+      // حساب إذا كانت الدفعة متأخرة
+      if (payment.status === 'pending' && payment.monthCode) {
+        const monthDate = moment(payment.monthCode, 'YYYY-MM');
+        if (monthDate.isBefore(moment(), 'month')) {
+          paymentObj.isLate = true;
+        }
+      }
+      
+      // إضافة معلومات الحصة
+      if (payment.class) {
+        paymentObj.className = payment.class.name;
+        paymentObj.subject = payment.class.subject;
+        paymentObj.teacherName = payment.class.teacher?.name || 'غير محدد';
+      }
+      
+      // إضافة معلومات الطالب
+      if (payment.student) {
+        paymentObj.studentName = payment.student.name;
+        paymentObj.studentId = payment.student.studentId;
+      }
+      
+      // تنسيق التاريخ
+      paymentObj.formattedDate = payment.paymentDate 
+        ? moment(payment.paymentDate).format('YYYY-MM-DD HH:mm')
+        : 'لم يتم الدفع';
+        
+      paymentObj.createdAtFormatted = moment(payment.createdAt).format('YYYY-MM-DD HH:mm');
+      
+      return paymentObj;
+    });
+    
+    // حساب الإحصائيات
+    const summary = {
+      total: enhancedPayments.length,
+      totalAmount: enhancedPayments.reduce((sum, p) => sum + p.amount, 0),
+      paid: enhancedPayments.filter(p => p.status === 'paid').length,
+      paidAmount: enhancedPayments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0),
+      pending: enhancedPayments.filter(p => p.status === 'pending').length,
+      pendingAmount: enhancedPayments.filter(p => p.status === 'pending').reduce((sum, p) => sum + p.amount, 0),
+      late: enhancedPayments.filter(p => p.isLate).length,
+      lateAmount: enhancedPayments.filter(p => p.isLate).reduce((sum, p) => sum + p.amount, 0)
+    };
+    
+    res.json({
+      success: true,
+      payments: enhancedPayments,
+      summary: summary,
+      studentInfo: payments[0]?.student || null
+    });
+    
   } catch (err) {
-    console.error('Error fetching student payments:', err);
-    res.status(500).json({ error: err.message });
+    console.error('❌ خطأ في جلب مدفوعات الطالب:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message,
+      payments: [],
+      summary: {
+        total: 0,
+        totalAmount: 0,
+        paid: 0,
+        paidAmount: 0,
+        pending: 0,
+        pendingAmount: 0,
+        late: 0,
+        lateAmount: 0
+      }
+    });
   }
 });
-
 
   // Student Registration Endpoint
   app.post('/api/student/register', async (req, res) => {
@@ -7467,15 +9002,26 @@ app.get('/api/teachers/count', async (req, res) => {
 });
 
 // Classes count endpoint
-app.get('/api/classes/count', async (req, res) => {
+// تأكد من أن هذا الكود موجود في نقطة /api/classes GET
+app.get('/api/classes',  async (req, res) => {
   try {
-      const count = await Class.countDocuments({});
-      res.json({ count, status: 'success' });
-  } catch (error) {
-      res.status(500).json({ error: 'Failed to count classes', status: 'error' });
+    const { academicYear, subject, teacher } = req.query;
+    const query = {};
+
+    if (academicYear) query.academicYear = academicYear;
+    if (subject) query.subject = subject;
+    if (teacher) query.teacher = teacher;
+
+    const classes = await Class.find(query)
+      .populate('teacher')
+      .populate('students')
+      .populate('schedule.classroom')
+      .sort({ createdAt: -1 });
+    res.json(classes);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
-
 
 app.post('/api/accounting/transactions', async (req, res) => {
   try {
@@ -7960,7 +9506,202 @@ process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
   process.exit(1);
 }); 
+app.post('/api/payment-systems/monthly',  async (req, res) => {
+  try {
+    const { studentId, classId, startDate, monthlyAmount, totalMonths, autoGenerate, notes } = req.body;
+    
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ error: 'الطالب غير موجود' });
+    }
+    
+    // التحقق مما إذا كان الطالب مسجلاً في الحصة
+    if (classId) {
+      const classObj = await Class.findById(classId);
+      if (!classObj) {
+        return res.status(404).json({ error: 'الحصة غير موجودة' });
+      }
+      
+      const isEnrolled = classObj.students.includes(studentId);
+      if (!isEnrolled) {
+        return res.status(400).json({ error: 'الطالب غير مسجل في هذه الحصة' });
+      }
+    }
+    
+    // إنشاء دفعات شهرية
+    const payments = [];
+    const start = new Date(startDate);
+    
+    for (let i = 0; i < totalMonths; i++) {
+      const paymentDate = new Date(start);
+      paymentDate.setMonth(start.getMonth() + i);
+      
+      const monthName = `${paymentDate.getFullYear()}-${(paymentDate.getMonth() + 1).toString().padStart(2, '0')}`;
+      
+      const payment = new Payment({
+        student: studentId,
+        class: classId || null,
+        amount: monthlyAmount,
+        month: monthName,
+        status: paymentDate < new Date() ? 'pending' : 'pending',
+        recordedBy: req.user.id,
+        notes: notes
+      });
+      
+      await payment.save();
+      payments.push(payment);
+    }
+    
+    res.status(201).json({
+      message: `تم إنشاء ${totalMonths} دفعة شهرية بنجاح`,
+      payments,
+      totalAmount: monthlyAmount * totalMonths
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
+// إنشاء نظام جولات
+app.post('/api/payment-systems/rounds',  async (req, res) => {
+  try {
+    const { studentId, classId, roundNumber, sessionCount, sessionPrice, totalAmount, startDate, endDate, notes } = req.body;
+    
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ error: 'الطالب غير موجود' });
+    }
+    
+    if (classId) {
+      const classObj = await Class.findById(classId);
+      if (!classObj) {
+        return res.status(404).json({ error: 'الحصة غير موجودة' });
+      }
+      
+      const isEnrolled = classObj.students.includes(studentId);
+      if (!isEnrolled) {
+        return res.status(400).json({ error: 'الطالب غير مسجل في هذه الحصة' });
+      }
+    }
+    
+    // إنشاء نظام الجولات
+    const roundPayment = new RoundPayment({
+      student: studentId,
+      class: classId || null,
+      roundNumber: roundNumber || `RND-${Date.now().toString().slice(-6)}`,
+      sessionCount,
+      sessionPrice,
+      totalAmount,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      status: 'pending',
+      recordedBy: req.user.id,
+      notes: notes,
+      sessions: []
+    });
+    
+    // توليد الجلسات
+    const sessions = [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const daysBetween = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
+    const interval = Math.floor(daysBetween / (sessionCount - 1));
+    
+    for (let i = 0; i < sessionCount; i++) {
+      const sessionDate = new Date(start);
+      sessionDate.setDate(start.getDate() + (i * interval));
+      
+      sessions.push({
+        sessionNumber: i + 1,
+        date: sessionDate,
+        status: 'pending',
+        price: sessionPrice
+      });
+    }
+    
+    roundPayment.sessions = sessions;
+    await roundPayment.save();
+    
+    // إنشاء دفعة واحدة للجولة
+    const payment = new Payment({
+      student: studentId,
+      class: classId || null,
+      amount: totalAmount,
+      month: `جولة ${roundPayment.roundNumber}`,
+      status: 'pending',
+      recordedBy: req.user.id,
+      notes: `دفعة الجولة ${roundPayment.roundNumber} - ${notes}`
+    });
+    
+    await payment.save();
+    
+    res.status(201).json({
+      message: 'تم إنشاء نظام الجولات بنجاح',
+      roundPayment,
+      payment
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// دفع جولة
+app.put('/api/payment-systems/rounds/:id/pay',  async (req, res) => {
+  try {
+    const { paymentMethod, paymentDate, notes } = req.body;
+    
+    const roundPayment = await RoundPayment.findById(req.params.id)
+      .populate('student')
+      .populate('class');
+    
+    if (!roundPayment) {
+      return res.status(404).json({ error: 'الجولة غير موجودة' });
+    }
+    
+    // تحديث حالة الجولة
+    roundPayment.status = 'paid';
+    roundPayment.sessions.forEach(session => {
+      session.status = 'completed';
+    });
+    
+    await roundPayment.save();
+    
+    // تحديث الدفعة المرتبطة
+    const payment = await Payment.findOne({
+      student: roundPayment.student._id,
+      month: `جولة ${roundPayment.roundNumber}`,
+      amount: roundPayment.totalAmount
+    });
+    
+    if (payment) {
+      payment.status = 'paid';
+      payment.paymentDate = new Date(paymentDate || new Date());
+      payment.paymentMethod = paymentMethod || 'cash';
+      payment.notes = notes || payment.notes;
+      await payment.save();
+    }
+    
+    // تسجيل المعاملة المالية
+    const transaction = new FinancialTransaction({
+      type: 'income',
+      amount: roundPayment.totalAmount,
+      description: `دفعة جولة ${roundPayment.roundNumber} للطالب ${roundPayment.student.name}`,
+      category: 'tuition',
+      recordedBy: req.user.id,
+      reference: roundPayment._id
+    });
+    
+    await transaction.save();
+    
+    res.json({
+      message: 'تم دفع الجولة بنجاح',
+      roundPayment,
+      payment
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 // Get student classes
