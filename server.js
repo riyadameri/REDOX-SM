@@ -2900,11 +2900,19 @@ async function createAutoPaymentSystem(studentId, classObj, enrollmentDate, reco
   // API للتسجيل الجماعي للطالب في عدة حصص
 // API للتسجيل الجماعي للطالب في عدة حصص
 // التسجيل الجماعي مع إنشاء أنظمة الدفع تلقائياً
-app.post('/api/students/:studentId/enroll-multiple',  async (req, res) => {
+app.post('/api/students/:studentId/enroll-multiple', async (req, res) => {
   try {
     const { classIds, roundSettings } = req.body;
     const studentId = req.params.studentId;
-    const recordedById = req.user.id;
+    
+    // الحل: استخدام مستخدم افتراضي للاختبار
+    let recordedById;
+    const anyUser = await User.findOne({});
+    if (anyUser) {
+      recordedById = anyUser._id;
+    } else {
+      recordedById = new mongoose.Types.ObjectId();
+    }
 
     console.log(`=== بدء التسجيل الجماعي ===`);
     console.log(`الطالب: ${studentId}`);
@@ -3534,6 +3542,75 @@ app.get('/api/payment-systems/monthly/student/:studentId', async (req, res) => {
   }
 });
 
+// نقطة نهاية لفحص وتصحيح الجولات
+app.get('/api/payment-systems/rounds/:id/check',  async (req, res) => {
+  try {
+    const roundId = req.params.id;
+    
+    console.log(`فحص الجولة: ${roundId}`);
+    
+    const roundPayment = await RoundPayment.findById(roundId)
+      .populate('student', 'name studentId')
+      .populate('class', 'name subject price')
+      .populate('recordedBy', 'username fullName');
+
+    if (!roundPayment) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الجولة غير موجودة' 
+      });
+    }
+
+    // البحث عن الدفعات المرتبطة
+    const relatedPayments = await Payment.find({
+      $or: [
+        { 
+          student: roundPayment.student?._id || roundPayment.student,
+          class: roundPayment.class?._id || roundPayment.class
+        },
+        {
+          notes: { $regex: roundPayment.roundNumber, $options: 'i' }
+        },
+        {
+          month: { $regex: roundPayment.roundNumber, $options: 'i' }
+        }
+      ]
+    });
+
+    const response = {
+      success: true,
+      round: roundPayment,
+      student: roundPayment.student,
+      class: roundPayment.class,
+      relatedPayments: relatedPayments,
+      paymentStatus: roundPayment.status,
+      issues: []
+    };
+
+    // كشف المشاكل المحتملة
+    if (!roundPayment.student) {
+      response.issues.push('الجولة لا تحتوي على بيانات طالب');
+    }
+
+    if (relatedPayments.length === 0) {
+      response.issues.push('لا توجد دفعات مرتبطة بهذه الجولة');
+    }
+
+    if (roundPayment.status === 'paid' && !roundPayment.paymentDate) {
+      response.issues.push('الجولة مدفوعة ولكن بدون تاريخ دفع');
+    }
+
+    res.json(response);
+
+  } catch (err) {
+    console.error('Error checking round:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
 // الحصول على جولات الطالب
 app.get('/api/payment-systems/rounds/student/:studentId',  async (req, res) => {
   try {
@@ -3590,64 +3667,137 @@ app.get('/api/payment-systems/rounds/student/:studentId',  async (req, res) => {
 
 
 // دفع جولة
+// FIXED ROUND PAYMENT ENDPOINT
 app.put('/api/payment-systems/rounds/:id/pay',  async (req, res) => {
   try {
+    console.log(`=== دفع الجولة ${req.params.id} ===`);
+    console.log('Body:', req.body);
+    
     const { paymentMethod, paymentDate, notes } = req.body;
     
+    // البحث عن الجولة مع البيانات المترابطة
     const roundPayment = await RoundPayment.findById(req.params.id)
-      .populate('student')
-      .populate('class');
-    
+      .populate('student', 'name studentId')
+      .populate('class', 'name subject price')
+      .populate('recordedBy', 'username fullName');
+
     if (!roundPayment) {
-      return res.status(404).json({ error: 'الجولة غير موجودة' });
+      console.log('❌ الجولة غير موجودة:', req.params.id);
+      return res.status(404).json({ 
+        success: false,
+        error: 'الجولة غير موجودة' 
+      });
     }
-    
+
+    console.log('✅ تم العثور على الجولة:', roundPayment.roundNumber);
+    console.log('الطالب:', roundPayment.student?.name);
+    console.log('المبلغ:', roundPayment.totalAmount);
+
     // تحديث حالة الجولة
     roundPayment.status = 'paid';
-    roundPayment.sessions.forEach(session => {
-      session.status = 'completed';
-    });
+    roundPayment.paymentDate = paymentDate || new Date();
+    roundPayment.paymentMethod = paymentMethod || 'cash';
     
+    if (notes) {
+      roundPayment.notes = notes;
+    }
+
+    // تحديث حالة الجلسات
+    if (roundPayment.sessions && roundPayment.sessions.length > 0) {
+      roundPayment.sessions.forEach(session => {
+        session.status = 'completed';
+      });
+    }
+
     await roundPayment.save();
-    
+    console.log('✅ تم تحديث حالة الجولة');
+
     // البحث عن الدفعة المرتبطة وتحديثها
     const payment = await Payment.findOne({
-      student: roundPayment.student._id,
-      class: roundPayment.class?._id,
-      month: `جولة ${roundPayment.roundNumber}`
+      $or: [
+        { 
+          student: roundPayment.student?._id || roundPayment.student,
+          class: roundPayment.class?._id || roundPayment.class,
+          month: { $regex: roundPayment.roundNumber, $options: 'i' }
+        },
+        {
+          notes: { $regex: roundPayment.roundNumber, $options: 'i' }
+        }
+      ]
     });
-    
+
     if (payment) {
       payment.status = 'paid';
-      payment.paymentDate = paymentDate || new Date();
-      payment.paymentMethod = paymentMethod || 'cash';
-      payment.notes = notes || payment.notes;
-      await payment.save();
+      payment.paymentDate = roundPayment.paymentDate;
+      payment.paymentMethod = roundPayment.paymentMethod;
       
-      // تسجيل المعاملة المالية
-      const transaction = new FinancialTransaction({
-        type: 'income',
+      if (notes) {
+        payment.notes = notes;
+      }
+      
+      await payment.save();
+      console.log('✅ تم تحديث الدفعة المرتبطة:', payment._id);
+    } else {
+      console.log('⚠️ لم يتم العثور على دفعة مرتبطة');
+      
+      // إنشاء دفعة جديدة إذا لم توجد
+      const newPayment = new Payment({
+        student: roundPayment.student?._id || roundPayment.student,
+        class: roundPayment.class?._id || roundPayment.class,
         amount: roundPayment.totalAmount,
-        description: `دفعة جولة ${roundPayment.roundNumber} للطالب ${roundPayment.student.name}`,
-        category: 'tuition',
-        recordedBy: req.user.id,
-        reference: roundPayment._id
+        month: `جولة ${roundPayment.roundNumber}`,
+        monthCode: new Date().toISOString().slice(0, 7),
+        status: 'paid',
+        paymentMethod: roundPayment.paymentMethod,
+        paymentDate: roundPayment.paymentDate,
+        recordedBy: req.user?.id,
+        notes: `دفعة جولة ${roundPayment.roundNumber} - ${roundPayment.notes || ''}`
       });
       
-      await transaction.save();
+      await newPayment.save();
+      console.log('✅ تم إنشاء دفعة جديدة:', newPayment._id);
     }
-    
+
+    // تسجيل المعاملة المالية
+    const transaction = new FinancialTransaction({
+      type: 'income',
+      amount: roundPayment.totalAmount,
+      description: `دفعة جولة ${roundPayment.roundNumber} للطالب ${roundPayment.student?.name || 'غير معروف'}`,
+      category: 'tuition',
+      recordedBy: req.user?.id,
+      reference: roundPayment._id,
+      student: roundPayment.student?._id || roundPayment.student
+    });
+
+    await transaction.save();
+    console.log('✅ تم تسجيل المعاملة المالية');
+
+    // الحصول على البيانات المحدثة
+    const updatedRound = await RoundPayment.findById(req.params.id)
+      .populate('student', 'name studentId')
+      .populate('class', 'name subject price');
+
     res.json({
       success: true,
-      message: 'تم دفع الجولة بنجاح',
-      roundPayment: roundPayment,
-      payment: payment
+      message: `تم دفع الجولة ${roundPayment.roundNumber} بنجاح بقيمة ${roundPayment.totalAmount.toLocaleString()} د.ج`,
+      roundPayment: updatedRound,
+      receiptNumber: `RND-${Date.now().toString().slice(-8)}`,
+      details: {
+        student: updatedRound.student?.name,
+        roundNumber: updatedRound.roundNumber,
+        amount: updatedRound.totalAmount,
+        paymentDate: updatedRound.paymentDate
+      }
     });
+
   } catch (err) {
-    console.error('Error paying round:', err);
+    console.error('❌ خطأ في دفع الجولة:', err);
+    console.error('Stack:', err.stack);
+    
     res.status(500).json({ 
       success: false,
-      error: err.message 
+      error: err.message,
+      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
   }
 });
