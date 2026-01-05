@@ -15,15 +15,24 @@ require('dotenv').config();
   const app = express();
   const server = require('http').createServer(app);
 
-  const io = socketio(server, {
-    cors: {
-      origin: "*", // or "*" for development
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      credentials: true
+// تحديث إعدادات Socket.IO
+const io = socketio(server, {
+  cors: {
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
     },
-    transports: ['websocket', 'polling', 'flashsocket', 'htmlfile'] // Add this line
-
-  });
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization']
+  },
+  transports: ['websocket', 'polling'],
+  path: '/socket.io/', // إضافة path لـ Render
+  serveClient: false
+});
 
   // Middleware
 // Add this BEFORE all other routes and middleware
