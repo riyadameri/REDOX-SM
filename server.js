@@ -1988,7 +1988,7 @@ app.get('/api/teachers/:id/details',  async (req, res) => {
   
   
 // endpoint جديد للحصول على مدفوعات الأستاذ
-app.get('/api/teachers/:id/payments', authenticate(['admin', 'accountant', 'teacher']), async (req, res) => {
+app.get('/api/teachers/:id/payments',  async (req, res) => {
   try {
     const { startDate, endDate, status } = req.query;
     const query = { teacher: req.params.id };
@@ -3113,7 +3113,7 @@ app.get('/api/students/:studentId/payment-systems',  async (req, res) => {
 });
 
 // نقطة نهاية لاختبار إنشاء نظام الدفع
-app.post('/api/test/create-payments', authenticate(['admin', 'accountant']), async (req, res) => {
+app.post('/api/test/create-payments',  async (req, res) => {
   try {
     const { studentId, classId, type } = req.body;
     
@@ -4439,7 +4439,7 @@ app.get('/api/notifications',  async (req, res) => {
 });
 
 // 11. Export Daily Report
-app.get('/api/accounting/export-daily-report', authenticate(['admin', 'accountant']), async (req, res) => {
+app.get('/api/accounting/export-daily-report',  async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -4694,7 +4694,7 @@ app.post('/api/payments/bulk', async (req, res) => {
 // Register Payment - FIXED VERSION - Update to return populated data
 // دفع دفعة موجودة
 // دفع دفعة موجودة - FIXED VERSION
-app.put('/api/payments/:id/pay', authenticate(['admin', 'accountant']), async (req, res) => {
+app.put('/api/payments/:id/pay',  async (req, res) => {
   try {
     const { paymentMethod, paymentDate, notes } = req.body;
     
@@ -5636,7 +5636,7 @@ app.get('/api/payments/student/:studentId',  async (req, res) => {
     }
   });
   // Reject Student
-  app.put('/api/admin/reject-student/:id', authenticate(['student', 'secretary', 'admin','accountant']), async (req, res) => {
+  app.put('/api/admin/reject-student/:id',  async (req, res) => {
     try {
       const { reason } = req.body;
       const student = await Student.findByIdAndUpdate(
@@ -5712,7 +5712,7 @@ app.get('/api/payments/student/:studentId',  async (req, res) => {
 
   // Get all student accounts with filtering
   // Get all student accounts with filtering
-  app.get('/api/student-accounts', authenticate(['student', 'secretary', 'admin','accountant']), async (req, res) => {
+  app.get('/api/student-accounts',  async (req, res) => {
   try {
     const { status, search } = req.query;
     const query = { role: 'student' };
@@ -5736,7 +5736,7 @@ app.get('/api/payments/student/:studentId',  async (req, res) => {
   }
   });
   // Create student account
-  app.post('/api/student-accounts', authenticate(['student', 'secretary', 'admin','accountant']), async (req, res) => {
+  app.post('/api/student-accounts',  async (req, res) => {
     const { studentId, username, password, email } = req.body;
 
     try {
@@ -5796,7 +5796,7 @@ app.get('/api/payments/student/:studentId',  async (req, res) => {
     }
   });
   // Delete student account
-  app.delete('/api/student-accounts/:id', authenticate(['student', 'secretary', 'admin','accountant']), async (req, res) => {
+  app.delete('/api/student-accounts/:id',  async (req, res) => {
     try {
       const account = await StudentAccount.findByIdAndDelete(req.params.id);
       
@@ -5817,7 +5817,7 @@ app.get('/api/payments/student/:studentId',  async (req, res) => {
   });
 
   // Reset password
-  app.put('/api/student-accounts/:id/reset-password', authenticate(['student', 'secretary', 'admin','accountant']), async (req, res) => {
+  app.put('/api/student-accounts/:id/reset-password',  async (req, res) => {
     const { password } = req.body;
 
     try {
@@ -5846,7 +5846,7 @@ app.get('/api/payments/student/:studentId',  async (req, res) => {
   });
 
   // Toggle account status (active/inactive)
-  app.put('/api/student-accounts/:id/toggle-status', authenticate(['student', 'secretary', 'admin','accountant']), async (req, res) => {
+  app.put('/api/student-accounts/:id/toggle-status',  async (req, res) => {
     try {
       const account = await StudentAccount.findById(req.params.id);
       
@@ -5979,7 +5979,7 @@ app.get('/api/payments/student/:studentId',  async (req, res) => {
   });
 
   // Student Change Password
-  app.post('/api/student/change-password', authenticate(['student','student', 'secretary', 'admin','accountant']), async (req, res) => {
+  app.post('/api/student/change-password',  async (req, res) => {
     try {
       const { currentPassword, newPassword } = req.body;
       const studentAccount = await StudentAccount.findById(req.user.id);
@@ -6059,7 +6059,7 @@ app.get('^', (req, res) => {
   // });
 
 
-  app.get('/student/dashboard', authenticate(['student', 'secretary', 'admin','accountant']), (req, res) => {
+  app.get('/student/dashboard',  (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'student-dashboard.html'));
   });
 
@@ -6500,7 +6500,7 @@ app.post('/api/accounting/teacher-commissions/:id/pay',  async (req, res) => {
   });
 
   // Add expense with validation
-  app.post('/api/accounting/expenses', authenticate(['admin', 'accountant']), async (req, res) => {
+  app.post('/api/accounting/expenses',  async (req, res) => {
     try {
       console.log('=== ADD EXPENSE REQUEST ===');
       console.log('Headers:', req.headers);
@@ -6681,7 +6681,7 @@ app.post('/api/accounting/test-update-dates', async (req, res) => {
 // نظام دفع العمولة الجديد للحصص الشاملة
 // ==============================================
 // Endpoint للتشخيص
-app.post('/api/accounting/test-payment', authenticate(['admin', 'accountant']), async (req, res) => {
+app.post('/api/accounting/test-payment',  async (req, res) => {
   try {
     console.log('=== TEST PAYMENT REQUEST ===');
     console.log('Body:', req.body);
@@ -6706,7 +6706,7 @@ app.post('/api/accounting/test-payment', authenticate(['admin', 'accountant']), 
     res.status(500).json({ error: err.message });
   }
 });
-app.post('/api/accounting/pay-class-commission', authenticate(['admin', 'accountant']), async (req, res) => {
+app.post('/api/accounting/pay-class-commission',  async (req, res) => {
   try {
     console.log('=== PAY CLASS COMMISSION REQUEST ===');
     console.log('Body:', req.body);
@@ -8578,7 +8578,7 @@ app.get('/api/accounting/summary',  async (req, res) => {
 
 // دالة محسنة باستخدام النقطة الجديدة
 
-app.post('/api/accounting/expenses', authenticate(['admin', 'accountant']), async (req, res) => {
+app.post('/api/accounting/expenses',  async (req, res) => {
   try {
     console.log('=== ADD EXPENSE REQUEST ===');
     console.log('Headers:', req.headers);
