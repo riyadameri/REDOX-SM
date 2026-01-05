@@ -30,13 +30,13 @@ require('dotenv').config();
 // Replace this CORS configuration in your server.js:
 // Use this CORS configuration instead:
 const corsOptions = {
-  origin: '*',  
+  origin: ['http://localhost:4200', 'http://localhost:3000', 'http://localhost:8080' ,'http://redox-sm.onrender.com','https://redox-sm.onrender.com','https://localhost:4200', 'https://localhost:3000', 'https://localhost:8080' ,],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   credentials: true,
   preflightContinue: true,
   optionsSuccessStatus: 204,
-  exposedHeaders: ['Content-Range', 'X-Content-Range'] // Optional: if you need custom headers
+  maxAge: 86400 // 24 ساعة
 };
 
 app.use(cors(corsOptions));
@@ -44,6 +44,20 @@ app.use(cors(corsOptions));
 // Handle OPTIONS requests explicitly for all routes
 app.options('*', cors(corsOptions));
 // Handle OPTIONS requests (preflight)
+
+// إضافة middleware للتصحيح
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url} - Origin: ${req.headers.origin}`);
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 
   app.use(express.json());
