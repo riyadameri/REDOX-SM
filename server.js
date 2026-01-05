@@ -263,16 +263,17 @@ const classSchema = new mongoose.Schema({
     class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: false },
     amount: { type: Number, required: true },
     month: { type: String, required: true },
-    monthCode: { type: String, required: false }, // تنسيق YYYY-MM للترتيب
+    monthCode: { type: String, required: false },
     paymentDate: { type: Date, default: null },
     status: { type: String, enum: ['paid', 'pending', 'late'], default: 'pending' },
     paymentMethod: { type: String, enum: ['cash', 'bank', 'online'], default: 'cash' },
     invoiceNumber: String,
-    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false }, // غير مطلوب
     commissionRecorded: { type: Boolean, default: false },
     commissionId: { type: mongoose.Schema.Types.ObjectId, ref: 'TeacherCommission' }
   }, { timestamps: true });
-  
+
+
   const messageSchema = new mongoose.Schema({
     sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     recipients: [{
@@ -4723,12 +4724,6 @@ app.put('/api/payments/:id/pay', async (req, res) => {
     
     console.log(`دفع الدفعة ${req.params.id}:`, req.body);
     
-    // تجاوز المصادقة مؤقتاً للاختبار
-    // console.log('المستخدم المصادق:', req.user); // هذا سيعطي undefined
-    
-    // لاختبار فقط: استخدام مستخدم وهمي
-    const testUserId = 'user_id_for_testing'; // أو استخدم معرف مستخدم حقيقي من قاعدة البيانات
-    
     const payment = await Payment.findById(req.params.id)
       .populate('student', 'name studentId parentPhone')
       .populate({
@@ -4745,45 +4740,38 @@ app.put('/api/payments/:id/pay', async (req, res) => {
       });
     }
     
-    // تحديث حالة الدفعة
+    // تحديث حالة الدفعة فقط بدون recordedBy
     payment.status = 'paid';
     payment.paymentDate = paymentDate || new Date();
     payment.paymentMethod = paymentMethod || 'cash';
     payment.invoiceNumber = payment.invoiceNumber || `INV-${Date.now().toString().slice(-8)}`;
-    payment.recordedBy = testUserId; // استخدام معرف اختبار
     
     if (notes) {
       payment.notes = notes;
     }
     
-    await payment.save();
+    // حذف حقل recordedBy إذا كان موجوداً في الطلب
+    const updateData = payment.toObject();
+    delete updateData.recordedBy;
     
-    // تسجيل المعاملة المالية (إيراد)
+    await Payment.findByIdAndUpdate(req.params.id, updateData);
+    
+    // تسجيل المعاملة المالية بدون recordedBy
     const transaction = new FinancialTransaction({
       type: 'income',
       amount: payment.amount,
       description: `دفعة شهرية لطالب ${payment.student.name} لشهر ${payment.month}`,
       category: 'tuition',
-      recordedBy: testUserId, // استخدام معرف اختبار
       reference: payment._id,
       student: payment.student._id
     });
     
     await transaction.save();
     
-    // إرسال إشعار للمحاسب عن الدفعة المدفوعة
-    io.emit('payment-paid', {
-      paymentId: payment._id,
-      studentName: payment.student.name,
-      amount: payment.amount,
-      month: payment.month,
-      paymentDate: payment.paymentDate
-    });
-    
     res.json({
       success: true,
       message: `تم تسديد الدفعة بنجاح`,
-      payment: payment,
+      payment: await Payment.findById(req.params.id),
       invoiceNumber: payment.invoiceNumber
     });
     
