@@ -4986,6 +4986,146 @@ app.get('/api/payments/:id', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// GET /api/payments/class/:classId - Get payments for a specific class
+app.get('/api/payments/class/:classId', async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const { status, month } = req.query;
+    
+    const query = { class: classId };
+    
+    if (status) query.status = status;
+    if (month) query.month = month;
+    
+    const payments = await Payment.find(query)
+      .populate('student', 'name studentId parentPhone')
+      .populate('class', 'name subject price')
+      .populate('recordedBy', 'username fullName')
+      .sort({ month: -1, createdAt: -1 });
+    
+    res.json({
+      success: true,
+      payments: payments,
+      count: payments.length,
+      totalAmount: payments.reduce((sum, p) => sum + p.amount, 0)
+    });
+    
+  } catch (err) {
+    console.error('Error fetching class payments:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+app.patch('/api/payments/:id/amount', async (req, res) => {
+  try {
+    const { amount } = req.body;
+    
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'المبلغ غير صالح'
+      });
+    }
+    
+    const updatedPayment = await Payment.findByIdAndUpdate(
+      req.params.id,
+      { amount: amount },
+      { new: true }
+    )
+    .populate('student', 'name studentId')
+    .populate('class', 'name subject');
+    
+    if (!updatedPayment) {
+      return res.status(404).json({
+        success: false,
+        error: 'الدفعة غير موجودة'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: `تم تحديث مبلغ الدفعة إلى ${amount} د.ج`,
+      payment: updatedPayment
+    });
+    
+  } catch (err) {
+    console.error('Error updating payment amount:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+app.put('/api/payments/:id' , async (req, res) => {
+  try {
+    console.log(`=== UPDATE PAYMENT REQUEST ===`);
+    console.log('Payment ID:', req.params.id);
+    console.log('Update data:', req.body);
+    
+    const paymentId = req.params.id;
+    const updateData = { ...req.body };
+    
+    // Remove fields that shouldn't be updated directly
+    delete updateData._id;
+    delete updateData.createdAt;
+    delete updateData.updatedAt;
+    
+    // Find and update the payment
+    const updatedPayment = await Payment.findByIdAndUpdate(
+      paymentId,
+      updateData,
+      { 
+        new: true, // Return the updated document
+        runValidators: true // Run mongoose validators
+      }
+    )
+    .populate('student', 'name studentId')
+    .populate('class', 'name subject')
+    .populate('recordedBy', 'username fullName');
+    
+    if (!updatedPayment) {
+      return res.status(404).json({
+        success: false,
+        error: 'الدفعة غير موجودة'
+      });
+    }
+    
+    console.log('Payment updated successfully:', updatedPayment._id);
+    
+    // If payment status changed to 'paid', record financial transaction
+    if (req.body.status === 'paid' && updatedPayment.paymentDate) {
+      const transaction = new FinancialTransaction({
+        type: 'income',
+        amount: updatedPayment.amount,
+        description: `دفعة شهرية لطالب ${updatedPayment.student?.name} لشهر ${updatedPayment.month}`,
+        category: 'tuition',
+        recordedBy: req.user?.id,
+        reference: updatedPayment._id,
+        student: updatedPayment.student?._id,
+        date: updatedPayment.paymentDate
+      });
+      
+      await transaction.save();
+      console.log('Financial transaction recorded:', transaction._id);
+    }
+    
+    res.json({
+      success: true,
+      message: 'تم تحديث الدفعة بنجاح',
+      payment: updatedPayment
+    });
+    
+  } catch (err) {
+    console.error('Error updating payment:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  }
+});
 
 // PUT /api/payments/:id/amount
 app.put('/api/payments/:id/amount', async (req, res) => {
