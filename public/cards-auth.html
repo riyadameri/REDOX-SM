@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة البطاقات المصرحة</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #2c5aa0;
+            --primary-dark: #1e3d72;
+            --secondary: #17a2b8;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --light: #f8f9fa;
+            --dark: #343a40;
+            --gray: #6c757d;
+            --border-radius: 10px;
+            --box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Cairo', sans-serif;
+            background: linear-gradient(135deg, #f4f7f6 0%, #e8f0fe 100%);
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            direction: rtl;
+            text-align: right;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 100%;
+            height: 5px;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            position: relative;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+
+        .redux-logo {
+            display: flex;
+            align-items: center;
+            background: linear-gradient(135deg, #764abc 0%, #4c2882 100%);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(118, 74, 188, 0.3);
+        }
+
+        .redux-logo i {
+            margin-left: 8px;
+            font-size: 1.2em;
+        }
+
+        h1 {
+            color: var(--primary);
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            color: var(--gray);
+            font-size: 1.1rem;
+        }
+
+        .stats-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .stat-card {
+            flex: 1;
+            min-width: 200px;
+            background: white;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            text-align: center;
+            border-top: 4px solid var(--primary);
+            transition: var(--transition);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 10px 0;
+        }
+
+        .stat-label {
+            color: var(--gray);
+            font-size: 1rem;
+        }
+
+        .form-section, .table-section {
+            margin-bottom: 40px;
+            background: white;
+            padding: 25px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+        }
+
+        h2 {
+            color: var(--primary);
+            font-size: 1.6rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+        }
+
+        h2 i {
+            margin-left: 10px;
+            color: var(--secondary);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        input[type="text"],
+        input[type="date"],
+        textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 16px;
+            transition: var(--transition);
+            font-family: 'Cairo', sans-serif;
+        }
+
+        input[type="text"]:focus,
+        input[type="date"]:focus,
+        textarea:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.1);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn i {
+            margin-left: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(44, 90, 160, 0.3);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger) 0%, #a71e2d 100%);
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, var(--warning) 0%, #e0a800 100%);
+            color: #333;
+        }
+
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 193, 7, 0.3);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--success) 0%, #1e7e34 100%);
+            color: #fff;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+        }
+
+        .card-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .card-table th, .card-table td {
+            border: 1px solid #eaeaea;
+            padding: 15px;
+            text-align: right;
+        }
+
+        .card-table th {
+            background-color: #f8f9fa;
+            font-weight: 700;
+            color: var(--dark);
+            position: sticky;
+            top: 0;
+        }
+
+        .card-table tbody tr {
+            transition: var(--transition);
+        }
+
+        .card-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .card-table tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        .card-table tbody tr:nth-child(even):hover {
+            background-color: #f0f0f0;
+        }
+
+        .actions-cell {
+            width: 180px;
+            text-align: center;
+        }
+
+        .actions-cell .btn {
+            margin-left: 5px;
+            padding: 8px 15px;
+            font-size: 14px;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #fff;
+            display: inline-block;
+        }
+
+        .status-active {
+            background-color: var(--success);
+        }
+
+        .status-expired {
+            background-color: var(--danger);
+        }
+
+        .status-inactive {
+            background-color: var(--gray);
+        }
+
+        /* Fast entry mode styles */
+        .fast-entry-mode {
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            margin-bottom: 30px;
+            border: 2px solid var(--success);
+            box-shadow: var(--box-shadow);
+        }
+
+        .fast-entry-status {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            margin-left: 10px;
+        }
+
+        .status-ready {
+            background-color: var(--success);
+        }
+
+        .status-waiting {
+            background-color: var(--warning);
+        }
+
+        .status-active-mode {
+            background-color: var(--danger);
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0.5; }
+        }
+
+        .counter-badge {
+            background-color: var(--secondary);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        /* Modal Styling */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+            padding-top: 60px;
+        }
+
+        .modal-content {
+            background-color: #fff;
+            margin: 5% auto;
+            padding: 25px;
+            border-radius: var(--border-radius);
+            width: 90%;
+            max-width: 500px;
+            position: relative;
+            animation: fadeIn 0.3s;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .close-btn {
+            color: #aaa;
+            float: left;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .close-btn:hover {
+            color: var(--dark);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .loading {
+            text-align: center;
+            color: var(--gray);
+            font-style: italic;
+            padding: 30px;
+            font-size: 1.1rem;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background-color: var(--danger);
+            color: white;
+            padding: 15px 25px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            animation: slideIn 0.3s, fadeOut 0.5s 2.5s forwards;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
+        .toast i {
+            margin-right: 10px;
+            font-size: 1.2rem;
+        }
+
+        /* Offline indicator */
+        .offline-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background-color: var(--danger);
+            color: white;
+            text-align: center;
+            padding: 10px;
+            z-index: 1002;
+            font-weight: bold;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            display: none;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .stats-container {
+                flex-direction: column;
+            }
+            
+            .stat-card {
+                min-width: 100%;
+            }
+            
+            .card-table {
+                display: block;
+                overflow-x: auto;
+            }
+            
+            .fast-entry-status {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+
+        /* Card duplicate animation */
+        .duplicate-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: var(--warning);
+            color: #333;
+            padding: 12px 20px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            animation: slideInRight 0.3s, fadeOut 0.5s 1.5s forwards;
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <!-- مؤشر عدم الاتصال -->
+    <div class="offline-indicator" id="offlineIndicator">
+        <i class="fas fa-wifi"></i> أنت غير متصل بالإنترنت. سيتم حفظ البيانات محلياً حتى استعادة الاتصال.
+    </div>
+
+    <div class="container">
+        <header>
+            <div class="logo-container">
+                <div class="redux-logo">
+                    <i class="fas fa-atom"></i> Redox
+                </div>
+            </div>
+            <h1>نظام إدارة البطاقات المصرحة</h1>
+            <p class="subtitle"> Raoua Mahdi |  بطاقات الدخول المصرحة بسهولة وأمان</p>
+        </header>
+
+        <!-- إحصائيات البطاقات -->
+        <div class="stats-container">
+            <div class="stat-card">
+                <i class="fas fa-id-card fa-2x" style="color: var(--primary);"></i>
+                <div class="stat-number" id="totalCards">0</div>
+                <div class="stat-label">إجمالي البطاقات</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-check-circle fa-2x" style="color: var(--success);"></i>
+                <div class="stat-number" id="activeCards">0</div>
+                <div class="stat-label">بطاقات نشطة</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-exclamation-circle fa-2x" style="color: var(--danger);"></i>
+                <div class="stat-number" id="expiredCards">0</div>
+                <div class="stat-label">بطاقات منتهية</div>
+            </div>
+        </div>
+
+        <!-- وضع الإدخال السريع -->
+        <div class="fast-entry-mode">
+            <div class="fast-entry-status">
+                <div>
+                    <strong>وضع الإدخال السريع:</strong>
+                    <span id="fastEntryStatus">جاهز</span>
+                    <span class="status-indicator status-ready" id="statusIndicator"></span>
+                </div>
+                <div>
+                    <span class="counter-badge" id="counterBadge">تم إضافة 0 بطاقة</span>
+                </div>
+            </div>
+            <p>لإضافة بطاقات بسرعة، انقر على زر التفعيل ثم مرر البطاقة واضغط Enter. سيتم ملء البيانات تلقائياً.</p>
+            <button id="toggleFastEntry" class="btn btn-success"><i class="fas fa-bolt"></i> تفعيل وضع الإدخال السريع</button>
+            <button id="stopFastEntry" class="btn btn-danger" style="display: none;"><i class="fas fa-stop"></i> إيقاف الوضع السريع</button>
+        </div>
+
+        <section class="form-section">
+            <h2><i class="fas fa-plus-circle"></i> إضافة بطاقة جديدة</h2>
+            <form id="addCardForm">
+                <div class="form-group">
+                    <label for="uid"><i class="fas fa-id-badge"></i> رقم البطاقة (UID)</label>
+                    <input type="text" id="uid" required placeholder="أدخل رقم البطاقة أو مررها">
+                </div>
+                <div class="form-group">
+                    <label for="cardName"><i class="fas fa-font"></i> اسم البطاقة</label>
+                    <input type="text" id="cardName" required placeholder="أدخل اسم البطاقة">
+                </div>
+                <div class="form-group">
+                    <label for="description"><i class="fas fa-align-left"></i> الوصف</label>
+                    <textarea id="description" placeholder="أدخل وصفاً للبطاقة (اختياري)"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="expirationDate"><i class="fas fa-calendar-alt"></i> تاريخ انتهاء الصلاحية</label>
+                    <input type="date" id="expirationDate" required>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> إضافة البطاقة</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="table-section">
+            <h2><i class="fas fa-list"></i> قائمة البطاقات المصرحة</h2>
+            <div id="loadingIndicator" class="loading" style="display: none;">
+                <i class="fas fa-spinner fa-spin"></i> جارٍ تحميل البيانات...
+            </div>
+            <table class="card-table">
+                <thead>
+                    <tr>
+                        <th>رقم البطاقة (UID)</th>
+                        <th>اسم البطاقة</th>
+                        <th>الوصف</th>
+                        <th>تاريخ الانتهاء</th>
+                        <th>الحالة</th>
+                        <th>إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody id="cardsTableBody">
+                    <!-- سيتم ملء البيانات هنا -->
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <!-- نافذة تعديل البطاقة -->
+    <div id="editCardModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2><i class="fas fa-edit"></i> تعديل بيانات البطاقة</h2>
+            <form id="editCardForm">
+                <input type="hidden" id="editCardId">
+                <div class="form-group">
+                    <label for="editUid">رقم البطاقة (UID)</label>
+                    <input type="text" id="editUid" disabled>
+                </div>
+                <div class="form-group">
+                    <label for="editCardName">اسم البطاقة</label>
+                    <input type="text" id="editCardName" required>
+                </div>
+                <div class="form-group">
+                    <label for="editDescription">الوصف</label>
+                    <textarea id="editDescription"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="editExpirationDate">تاريخ انتهاء الصلاحية</label>
+                    <input type="date" id="editExpirationDate" required>
+                </div>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="editActive">
+                    <label for="editActive">نشط</label>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> حفظ التغييرات</button>
+                    <button type="button" class="btn btn-secondary close-btn"><i class="fas fa-times"></i> إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = '/api/authorized-cards';
+        let fastEntryMode = false;
+        let cardsAddedCount = 0;
+        let allCards = [];
+        let isOnline = navigator.onLine;
+
+        // تحديث حالة الاتصال
+        window.addEventListener('online', () => {
+            isOnline = true;
+            document.getElementById('offlineIndicator').style.display = 'none';
+            // مزامنة البيانات المحلية مع الخادم عند استعادة الاتصال
+            syncLocalData();
+        });
+
+        window.addEventListener('offline', () => {
+            isOnline = false;
+            document.getElementById('offlineIndicator').style.display = 'block';
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const addCardForm = document.getElementById('addCardForm');
+            const cardsTableBody = document.getElementById('cardsTableBody');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const editCardModal = document.getElementById('editCardModal');
+            const editCardForm = document.getElementById('editCardForm');
+            const closeButtons = document.querySelectorAll('.close-btn');
+            const toggleFastEntryBtn = document.getElementById('toggleFastEntry');
+            const stopFastEntryBtn = document.getElementById('stopFastEntry');
+            const fastEntryStatus = document.getElementById('fastEntryStatus');
+            const statusIndicator = document.getElementById('statusIndicator');
+            const counterBadge = document.getElementById('counterBadge');
+            const uidInput = document.getElementById('uid');
+            const totalCardsElement = document.getElementById('totalCards');
+            const activeCardsElement = document.getElementById('activeCards');
+            const expiredCardsElement = document.getElementById('expiredCards');
+
+            // تعيين تاريخ انتهاء الصلاحية الافتراضي إلى 2027
+            const defaultExpirationDate = new Date();
+            defaultExpirationDate.setFullYear(2027);
+            document.getElementById('expirationDate').valueAsDate = defaultExpirationDate;
+
+            // تفعيل/إيقاف وضع الإدخال السريع
+            toggleFastEntryBtn.addEventListener('click', () => {
+                fastEntryMode = true;
+                toggleFastEntryBtn.style.display = 'none';
+                stopFastEntryBtn.style.display = 'inline-block';
+                fastEntryStatus.textContent = 'نشط';
+                statusIndicator.className = 'status-indicator status-active-mode';
+                
+                // التركيز على حقل UID للبدء في المسح
+                uidInput.focus();
+                showToast('وضع الإدخال السريع مفعل. قم بمسح البطاقة ثم اضغط Enter لإضافتها تلقائياً.', 'info');
+            });
+
+            // إيقاف وضع الإدخال السريع
+            stopFastEntryBtn.addEventListener('click', () => {
+                fastEntryMode = false;
+                toggleFastEntryBtn.style.display = 'inline-block';
+                stopFastEntryBtn.style.display = 'none';
+                fastEntryStatus.textContent = 'متوقف';
+                statusIndicator.className = 'status-indicator status-ready';
+                showToast('تم إيقاف وضع الإدخال السريع.', 'info');
+            });
+
+            // التعامل مع ضغط المفتاح في حقل UID
+            uidInput.addEventListener('keydown', (e) => {
+                if (fastEntryMode && e.key === 'Enter') {
+                    e.preventDefault();
+                    autoFillAndSubmit();
+                }
+            });
+
+            // ملء النموذج تلقائياً وإرساله
+            const autoFillAndSubmit = () => {
+                const uid = uidInput.value.trim();
+                if (!uid) return;
+                
+                // التحقق من تكرار البطاقة
+                if (isCardDuplicate(uid)) {
+                    showDuplicateNotification(uid);
+                    uidInput.value = '';
+                    uidInput.focus();
+                    return;
+                }
+                
+                // ملء البيانات تلقائياً
+                document.getElementById('cardName').value = `بطاقة ${uid.substring(0, 6)}`;
+                document.getElementById('description').value = `بطاقة مصرحة - ${new Date().toLocaleDateString('ar-DZ')}`;
+                
+                // إرسال النموذج تلقائياً
+                addCardForm.dispatchEvent(new Event('submit', { cancelable: true }));
+            };
+
+            // التحقق من تكرار البطاقة
+            const isCardDuplicate = (uid) => {
+                return allCards.some(card => card.uid === uid);
+            };
+
+            // عرض إشعار التكرار
+            const showDuplicateNotification = (uid) => {
+                const notification = document.createElement('div');
+                notification.className = 'duplicate-notification';
+                notification.innerHTML = `<i class="fas fa-exclamation-triangle"></i> البطاقة ${uid} مضافة مسبقاً`;
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.remove();
+                }, 2000);
+            };
+
+            // عرض إشعار عام
+            const showToast = (message, type = 'info') => {
+                const toast = document.createElement('div');
+                toast.className = 'toast';
+                
+                let icon = 'fas fa-info-circle';
+                if (type === 'error') icon = 'fas fa-exclamation-circle';
+                if (type === 'success') icon = 'fas fa-check-circle';
+                if (type === 'warning') icon = 'fas fa-exclamation-triangle';
+                
+                toast.innerHTML = `<i class="${icon}"></i> ${message}`;
+                document.body.appendChild(toast);
+                
+                setTimeout(() => {
+                    toast.remove();
+                }, 3000);
+            };
+
+            // تحديث الإحصائيات
+            const updateStats = () => {
+                const total = allCards.length;
+                const active = allCards.filter(card => new Date(card.expirationDate) >= new Date() && card.active).length;
+                const expired = allCards.filter(card => new Date(card.expirationDate) < new Date()).length;
+                
+                totalCardsElement.textContent = total;
+                activeCardsElement.textContent = active;
+                expiredCardsElement.textContent = expired;
+            };
+
+            // Fetch and display all authorized cards
+            const fetchCards = async () => {
+                try {
+                    loadingIndicator.style.display = 'block';
+                    const response = await fetch(API_BASE_URL);
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch cards');
+                    }
+                    allCards = await response.json();
+                    renderCards(allCards);
+                    updateStats();
+                } catch (error) {
+                    console.error('Error fetching cards:', error);
+                    // محاولة استخدام البيانات المحلية في حالة عدم الاتصال
+                    const localCards = localStorage.getItem('authorizedCards');
+                    if (localCards) {
+                        allCards = JSON.parse(localCards);
+                        renderCards(allCards);
+                        updateStats();
+                        showToast('يتم استخدام البيانات المحلية بسبب فقدان الاتصال', 'warning');
+                    } else {
+                        showToast('حدث خطأ أثناء تحميل البطاقات.', 'error');
+                    }
+                } finally {
+                    loadingIndicator.style.display = 'none';
+                }
+            };
+
+            // Render cards to the table
+            const renderCards = (cards) => {
+                cardsTableBody.innerHTML = ''; // Clear existing rows
+                if (cards.length === 0) {
+                    cardsTableBody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding: 30px; color: #6c757d;">لا توجد بطاقات مسجلة.</td></tr>';
+                    return;
+                }
+
+                cards.forEach(card => {
+                    const row = document.createElement('tr');
+                    const isExpired = new Date(card.expirationDate) < new Date();
+                    const statusClass = isExpired ? 'status-expired' : (card.active ? 'status-active' : 'status-inactive');
+                    const statusText = isExpired ? 'منتهية' : (card.active ? 'صالحة' : 'غير نشطة');
+
+                    row.innerHTML = `
+                        <td>${card.uid}</td>
+                        <td>${card.cardName}</td>
+                        <td>${card.description || '-'}</td>
+                        <td>${new Date(card.expirationDate).toLocaleDateString('ar-DZ')}</td>
+                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                        <td class="actions-cell">
+                            <button class="btn btn-warning edit-btn" data-id="${card._id}"><i class="fas fa-edit"></i> تعديل</button>
+                            <button class="btn btn-danger delete-btn" data-id="${card._id}"><i class="fas fa-trash"></i> حذف</button>
+                        </td>
+                    `;
+                    cardsTableBody.appendChild(row);
+                });
+            };
+
+            // Handle form submission for adding a new card
+            addCardForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const uid = document.getElementById('uid').value;
+                const cardName = document.getElementById('cardName').value;
+                const description = document.getElementById('description').value;
+                const expirationDate = document.getElementById('expirationDate').value;
+
+                // التحقق من التكرار مرة أخرى قبل الإرسال
+                if (isCardDuplicate(uid)) {
+                    showDuplicateNotification(uid);
+                    if (fastEntryMode) {
+                        document.getElementById('uid').value = '';
+                        document.getElementById('uid').focus();
+                    }
+                    return;
+                }
+
+                try {
+                    const cardData = { uid, cardName, description, expirationDate, active: true };
+                    
+                    if (isOnline) {
+                        const response = await fetch(API_BASE_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(cardData)
+                        });
+
+                        const result = await response.json();
+                        if (!response.ok) {
+                            throw new Error(result.error || 'Failed to add card');
+                        }
+                    } else {
+                        // حفظ محلياً في حالة عدم الاتصال
+                        cardData._id = 'local_' + Date.now();
+                        allCards.push(cardData);
+                        localStorage.setItem('authorizedCards', JSON.stringify(allCards));
+                        showToast('تم حفظ البطاقة محلياً حتى استعادة الاتصال', 'warning');
+                    }
+
+                    cardsAddedCount++;
+                    counterBadge.textContent = `تم إضافة ${cardsAddedCount} بطاقة`;
+                    
+                    // في وضع الإدخال السريع، لا نعرض التنبيه ونقوم بإعادة تعيين الحقول فقط
+                    if (fastEntryMode) {
+                        document.getElementById('uid').value = '';
+                        document.getElementById('uid').focus(); // العودة إلى حقل UID للمسح التالي
+                    } else {
+                        showToast('تمت إضافة البطاقة بنجاح!', 'success');
+                        addCardForm.reset();
+                        // إعادة تعيين تاريخ الانتهاء إلى القيمة الافتراضية
+                        document.getElementById('expirationDate').valueAsDate = defaultExpirationDate;
+                    }
+                    
+                    fetchCards(); // Refresh the list
+                } catch (error) {
+                    console.error('Error adding card:', error);
+                    showToast(error.message, 'error');
+                }
+            });
+
+            // Handle delete button click
+            cardsTableBody.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('delete-btn') || e.target.parentElement.classList.contains('delete-btn')) {
+                    const cardId = e.target.dataset.id || e.target.parentElement.dataset.id;
+                    if (confirm('هل أنت متأكد من حذف هذه البطاقة؟')) {
+                        try {
+                            if (isOnline) {
+                                const response = await fetch(`${API_BASE_URL}/${cardId}`, {
+                                    method: 'DELETE'
+                                });
+
+                                if (!response.ok) {
+                                    throw new Error('Failed to delete card');
+                                }
+                            } else {
+                                // حذف محلي في حالة عدم الاتصال
+                                allCards = allCards.filter(card => card._id !== cardId);
+                                localStorage.setItem('authorizedCards', JSON.stringify(allCards));
+                                showToast('تم حذف البطاقة محلياً', 'warning');
+                            }
+
+                            showToast('تم حذف البطاقة بنجاح!', 'success');
+                            fetchCards(); // Refresh the list
+                        } catch (error) {
+                            console.error('Error deleting card:', error);
+                            showToast('حدث خطأ أثناء حذف البطاقة.', 'error');
+                        }
+                    }
+                }
+            });
+
+            // Handle edit button click
+            cardsTableBody.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('edit-btn') || e.target.parentElement.classList.contains('edit-btn')) {
+                    const cardId = e.target.dataset.id || e.target.parentElement.dataset.id;
+                    try {
+                        let card;
+                        if (isOnline) {
+                            const response = await fetch(`${API_BASE_URL}/${cardId}`);
+                            if (!response.ok) throw new Error('Card not found');
+                            card = await response.json();
+                        } else {
+                            // استخدام البيانات المحلية في حالة عدم الاتصال
+                            card = allCards.find(c => c._id === cardId);
+                            if (!card) throw new Error('Card not found');
+                        }
+                        
+                        // Populate the modal form with card data
+                        document.getElementById('editCardId').value = card._id;
+                        document.getElementById('editUid').value = card.uid;
+                        document.getElementById('editCardName').value = card.cardName;
+                        document.getElementById('editDescription').value = card.description || '';
+                        document.getElementById('editExpirationDate').value = new Date(card.expirationDate).toISOString().split('T')[0];
+                        document.getElementById('editActive').checked = card.active;
+                        
+                        // Display the modal
+                        editCardModal.style.display = 'block';
+                    } catch (error) {
+                        console.error('Error fetching card for edit:', error);
+                        showToast('حدث خطأ أثناء جلب بيانات البطاقة.', 'error');
+                    }
+                }
+            });
+
+            // Handle modal form submission for editing
+            editCardForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const cardId = document.getElementById('editCardId').value;
+                const updatedData = {
+                    cardName: document.getElementById('editCardName').value,
+                    description: document.getElementById('editDescription').value,
+                    expirationDate: document.getElementById('editExpirationDate').value,
+                    active: document.getElementById('editActive').checked
+                };
+
+                try {
+                    if (isOnline) {
+                        const response = await fetch(`${API_BASE_URL}/${cardId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(updatedData)
+                        });
+
+                        const result = await response.json();
+                        if (!response.ok) {
+                            throw new Error(result.error || 'Failed to update card');
+                        }
+                    } else {
+                        // تحديث محلي في حالة عدم الاتصال
+                        const cardIndex = allCards.findIndex(card => card._id === cardId);
+                        if (cardIndex !== -1) {
+                            allCards[cardIndex] = { ...allCards[cardIndex], ...updatedData };
+                            localStorage.setItem('authorizedCards', JSON.stringify(allCards));
+                            showToast('تم تحديث البطاقة محلياً', 'warning');
+                        }
+                    }
+
+                    showToast('تم تعديل البطاقة بنجاح!', 'success');
+                    editCardModal.style.display = 'none'; // Close modal
+                    fetchCards(); // Refresh the list
+                } catch (error) {
+                    console.error('Error updating card:', error);
+                    showToast(error.message, 'error');
+                }
+            });
+
+            // Close the modal when the user clicks on <span> (x) or the "Cancel" button
+            closeButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    editCardModal.style.display = 'none';
+                });
+            });
+
+            // Close the modal when the user clicks anywhere outside of it
+            window.addEventListener('click', (e) => {
+                if (e.target === editCardModal) {
+                    editCardModal.style.display = 'none';
+                }
+            });
+
+            // مزامنة البيانات المحلية مع الخادم عند استعادة الاتصال
+            const syncLocalData = async () => {
+                const localCards = localStorage.getItem('authorizedCards');
+                if (localCards) {
+                    const cards = JSON.parse(localCards);
+                    for (const card of cards) {
+                        if (card._id && card._id.startsWith('local_')) {
+                            try {
+                                const response = await fetch(API_BASE_URL, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({...card, _id: undefined})
+                                });
+                                
+                                if (response.ok) {
+                                    // إزالة البطاقة من التخزين المحلي بعد المزامنة الناجحة
+                                    const updatedCards = cards.filter(c => c._id !== card._id);
+                                    localStorage.setItem('authorizedCards', JSON.stringify(updatedCards));
+                                }
+                            } catch (error) {
+                                console.error('Error syncing card:', error);
+                            }
+                        }
+                    }
+                    showToast('تم مزامنة البيانات المحلية مع الخادم', 'success');
+                    fetchCards(); // إعادة تحميل البيانات من الخادم
+                }
+            };
+
+            // Initial data load
+            fetchCards();
+        });
+    </script>
+</body>
+</html>

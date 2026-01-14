@@ -38,14 +38,28 @@ const io = socketio(server, {
 // Add this BEFORE all other routes and middleware
 // Replace this CORS configuration in your server.js:
 // Use this CORS configuration instead:
+// Remove duplicate CORS middleware and keep only one
 const corsOptions = {
-  origin: ['http://localhost:4200', 'http://localhost:3000', 'http://localhost:8080' ,'http://redox-sm.onrender.com','https://redox-sm.onrender.com','https://localhost:4200', 'https://localhost:3000', 'https://localhost:8080' ,],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:4200',
+      'http://localhost:3000',
+      'http://localhost:8080',
+      'http://redox-sm.onrender.com',
+      'https://redox-sm.onrender.com',
+      'https://localhost:4200',
+      'https://localhost:3000',
+      'https://localhost:8080'
+    ];
+    
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  preflightContinue: true,
-  optionsSuccessStatus: 204,
-  maxAge: 86400 // 24 ساعة
+  optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
@@ -863,26 +877,26 @@ liveClassSchema.pre('save', function(next) {
 
   const authenticate = (roles = []) => {
     return (req, res, next) => {
-        try {
-            const token = req.headers.authorization?.split(' ')[1];
-            
-            if (!token) {
-                return res.status(401).json({ error: 'غير مصرح بالدخول' });
-            }
-            
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            req.user = decoded;
-            
-            if (roles.length && !roles.includes(decoded.role)) {
-                return res.status(403).json({ error: 'غير مصرح بالوصول لهذه الصلاحية' });
-            }
-            
-            next();
-        } catch (err) {
-            res.status(401).json({ error: 'رمز الدخول غير صالح' });
+      try {
+        const token = req.headers.authorization?.split(' ')[1];
+        
+        if (!token) {
+          return res.status(401).json({ error: 'غير مصرح بالدخول' });
         }
+        
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+        
+        if (roles.length && !roles.includes(decoded.role)) {
+          return res.status(403).json({ error: 'غير مصرح بالوصول لهذه الصلاحية' });
+        }
+        
+        next();
+      } catch (err) {
+        res.status(401).json({ error: 'رمز الدخول غير صالح' });
+      }
     };
-};
+  };
 const optionalAuth = (req, res, next) => {
   try {
       const token = req.headers.authorization?.split(' ')[1];
@@ -3981,19 +3995,22 @@ app.post('/api/payments',  async (req, res) => {
 // ==============================================
 
 // 1. Daily Statistics - Aggregated endpoint
-app.get('/api/dashboard/daily-stats',  async (req, res) => {
+// في server.js - عدّل هذه النقطة لتكون بدون مصادقة
+app.get('/api/dashboard/daily-stats', async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Get daily income
+    console.log('Fetching dashboard stats for:', today);
+
+    // دخل اليوم
     const dailyIncome = await Payment.aggregate([
       {
         $match: {
-          paymentDate: { $gte: today, $lt: tomorrow },
-          status: 'paid'
+          status: 'paid',
+          paymentDate: { $gte: today, $lt: tomorrow }
         }
       },
       {
@@ -4004,12 +4021,12 @@ app.get('/api/dashboard/daily-stats',  async (req, res) => {
       }
     ]);
 
-    // Get today's expenses
-    const todayExpenses = await Expense.aggregate([
+    // مصروفات اليوم
+    const dailyExpenses = await Expense.aggregate([
       {
         $match: {
-          date: { $gte: today, $lt: tomorrow },
-          status: 'paid'
+          status: 'paid',
+          date: { $gte: today, $lt: tomorrow }
         }
       },
       {
@@ -4020,13 +4037,13 @@ app.get('/api/dashboard/daily-stats',  async (req, res) => {
       }
     ]);
 
-    // Get today's classes count
+    // الحصص اليوم
     const todayClassesCount = await LiveClass.countDocuments({
       date: { $gte: today, $lt: tomorrow },
       status: { $in: ['scheduled', 'ongoing'] }
     });
 
-    // Get today's attendance stats
+    // الحضور اليوم
     const todayAttendance = await LiveClass.aggregate([
       {
         $match: {
@@ -4044,136 +4061,218 @@ app.get('/api/dashboard/daily-stats',  async (req, res) => {
       }
     ]);
 
-    // Format attendance stats
+    // تحويل الحضور إلى كائن
     const attendanceStats = {
       present: 0,
       absent: 0,
       late: 0
     };
-
+    
     todayAttendance.forEach(stat => {
-      attendanceStats[stat._id] = stat.count;
+      if (attendanceStats.hasOwnProperty(stat._id)) {
+        attendanceStats[stat._id] = stat.count;
+      }
     });
+
+    // الطلاب المتأخرين (دون استخدام aggregate معقد)
+    const pendingPayments = await Payment.find({
+      status: 'pending',
+      monthCode: { $lt: today.toISOString().slice(0, 7) }
+    }).distinct('student');
 
     res.json({
       success: true,
       dailyStats: {
         income: dailyIncome[0]?.total || 0,
-        expenses: todayExpenses[0]?.total || 0,
-        profit: (dailyIncome[0]?.total || 0) - (todayExpenses[0]?.total || 0),
+        expenses: dailyExpenses[0]?.total || 0,
+        profit: (dailyIncome[0]?.total || 0) - (dailyExpenses[0]?.total || 0),
         totalClasses: todayClassesCount || 0
       },
-      currentStudents: attendanceStats
+      currentStudents: attendanceStats,
+      lateStudentsCount: pendingPayments.length || 0,
+      timestamp: new Date(),
+      debug: {
+        dateRange: { start: today, end: tomorrow },
+        income: dailyIncome[0]?.total || 0,
+        expenses: dailyExpenses[0]?.total || 0
+      }
     });
   } catch (err) {
-    console.error('Error fetching dashboard stats:', err);
+    console.error('Error in dashboard stats:', err);
     res.status(500).json({ 
       success: false,
-      error: err.message 
+      error: err.message,
+      dailyStats: {
+        income: 0,
+        expenses: 0,
+        profit: 0,
+        totalClasses: 0
+      },
+      currentStudents: {
+        present: 0,
+        absent: 0,
+        late: 0
+      },
+      lateStudentsCount: 0
     });
   }
 });
-
 // 2. Today's Classes
-app.get('/api/live-classes/today',  async (req, res) => {
+// في server.js - إضافة هذه النقطة للمساعدة في التصحيح
+app.get('/api/debug/check-payments', async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
+    // تحقق من المدفوعات اليومية
+    const todayPayments = await Payment.find({
+      paymentDate: { $gte: today, $lt: tomorrow },
+      status: 'paid'
+    }).populate('student', 'name');
+
+    // تحقق من المصروفات اليومية
+    const todayExpenses = await Expense.find({
+      date: { $gte: today, $lt: tomorrow },
+      status: 'paid'
+    });
+
+    // تحقق من الحصص اليوم
+    const todayClasses = await LiveClass.find({
+      date: { $gte: today, $lt: tomorrow }
+    });
+
+    res.json({
+      today: today.toISOString(),
+      payments: {
+        count: todayPayments.length,
+        total: todayPayments.reduce((sum, p) => sum + p.amount, 0),
+        items: todayPayments.map(p => ({
+          student: p.student?.name,
+          amount: p.amount,
+          date: p.paymentDate
+        }))
+      },
+      expenses: {
+        count: todayExpenses.length,
+        total: todayExpenses.reduce((sum, e) => sum + e.amount, 0),
+        items: todayExpenses.map(e => ({
+          description: e.description,
+          amount: e.amount,
+          date: e.date
+        }))
+      },
+      classes: {
+        count: todayClasses.length,
+        items: todayClasses.map(c => ({
+          id: c._id,
+          time: c.startTime,
+          status: c.status
+        }))
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// في server.js - عدّل هذه النقطة
+app.get('/api/live-classes/today', async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    console.log('Fetching today classes for:', today);
+
     const todayClasses = await LiveClass.find({
       date: { $gte: today, $lt: tomorrow }
     })
-    .populate('class', 'name subject price')
+    .populate('class', 'name subject')
     .populate('teacher', 'name')
     .populate('classroom', 'name')
     .sort({ startTime: 1 });
 
-    // Transform data for frontend
     const formattedClasses = todayClasses.map(lc => ({
       _id: lc._id,
       name: lc.class?.name || 'غير محدد',
       subject: lc.class?.subject || 'غير محدد',
-      teacher: lc.teacher,
+      teacher: lc.teacher?.name || 'غير محدد',
       time: lc.startTime,
-      classroom: lc.classroom,
+      classroom: lc.classroom?.name || 'غير محدد',
       isScheduled: lc.status !== 'scheduled',
       studentsCount: lc.attendance?.length || 0,
       status: lc.status
     }));
 
+    console.log(`Found ${formattedClasses.length} classes today`);
+
     res.json(formattedClasses);
   } catch (err) {
     console.error('Error fetching today classes:', err);
-    res.status(500).json({ 
-      success: false,
-      error: err.message 
-    });
+    res.status(500).json([]);
   }
 });
 
 // 3. Late Students (Students with pending payments)
-app.get('/api/students/late-payments',  async (req, res) => {
+// في server.js - عدّل هذه النقطة
+app.get('/api/students/late-payments', async (req, res) => {
   try {
-    const lateStudents = await Payment.aggregate([
-      {
-        $match: {
-          status: 'pending',
-          monthCode: { 
-            $lt: new Date().toISOString().slice(0, 7) // Older than current month
-          }
-        }
-      },
-      {
-        $lookup: {
-          from: 'students',
-          localField: 'student',
-          foreignField: '_id',
-          as: 'student'
-        }
-      },
-      {
-        $unwind: '$student'
-      },
-      {
-        $group: {
-          _id: '$student._id',
-          name: { $first: '$student.name' },
-          studentId: { $first: '$student.studentId' },
-          amountDue: { $sum: '$amount' },
-          monthsLate: { $sum: 1 },
-          latestPaymentDate: { $max: '$createdAt' }
-        }
-      },
-      {
-        $project: {
-          _id: 1,
-          name: 1,
-          studentId: 1,
-          amountDue: 1,
-          monthsLate: 1,
-          latestPaymentDate: 1
-        }
-      },
-      {
-        $sort: { amountDue: -1 }
-      },
-      {
-        $limit: 20
-      }
-    ]);
+    const currentDate = new Date();
+    const currentMonth = currentDate.toISOString().slice(0, 7);
+    
+    console.log('Fetching late payments for month before:', currentMonth);
 
-    res.json(lateStudents);
+    // طريقة أبسط: الحصول على الطلاب الذين لديهم دفعات pending
+    const pendingPayments = await Payment.find({
+      status: 'pending'
+    }).populate('student', 'name studentId');
+
+    // تجميع حسب الطالب
+    const studentMap = new Map();
+    
+    pendingPayments.forEach(payment => {
+      if (payment.student) {
+        const studentId = payment.student._id.toString();
+        
+        if (!studentMap.has(studentId)) {
+          studentMap.set(studentId, {
+            student: payment.student,
+            amountDue: 0,
+            monthsLate: 0,
+            payments: []
+          });
+        }
+        
+        const studentData = studentMap.get(studentId);
+        studentData.amountDue += payment.amount;
+        studentData.monthsLate++;
+        studentData.payments.push(payment);
+      }
+    });
+
+    // تحويل إلى مصفوفة
+    const lateStudents = Array.from(studentMap.values()).map(data => ({
+      _id: data.student._id,
+      name: data.student.name,
+      studentId: data.student.studentId,
+      amountDue: data.amountDue,
+      monthsLate: data.monthsLate,
+      latestPaymentDate: data.payments[0]?.createdAt
+    }));
+
+    console.log(`Found ${lateStudents.length} students with pending payments`);
+
+    res.json(lateStudents.slice(0, 20)); // الحد الأقصى 20 طالب
   } catch (err) {
     console.error('Error fetching late students:', err);
     res.status(500).json({ 
-      success: false,
-      error: err.message 
+      error: 'Failed to fetch late students',
+      message: err.message 
     });
   }
 });
-
 // 4. Today's Attendance Stats
 app.get('/api/attendance/today-stats',  async (req, res) => {
   try {
