@@ -2541,18 +2541,23 @@ app.post('/api/classes',  async (req, res) => {
 });
 
 
-  app.get('/api/classes/:id',  async (req, res) => {
-    try {
-      const classObj = await Class.findById(req.params.id)
-        .populate('teacher')
-        .populate('students')
-        .populate('schedule.classroom');
-      if (!classObj) return res.status(404).json({ error: 'الحصة غير موجودة' });
-      res.json(classObj);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
+// In your server.js file, change the authenticate middleware for this endpoint:
+app.get('/api/classes/:id', optionalAuth, async (req, res) => {
+  try {
+    const classObj = await Class.findById(req.params.id)
+      .populate('teacher')
+      .populate('students')
+      .populate('schedule.classroom');
+    
+    if (!classObj) {
+      return res.status(404).json({ error: 'الحصة غير موجودة' });
     }
-  });
+    
+    res.json(classObj);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
   app.put('/api/classes/:id',  async (req, res) => {
     try {
@@ -9401,7 +9406,27 @@ app.get('/api/teachers/count', async (req, res) => {
 
 // Classes count endpoint
 // تأكد من أن هذا الكود موجود في نقطة /api/classes GET
-app.get('/api/classes',  async (req, res) => {
+// app.get('/api/classes',  async (req, res) => {
+//   try {
+//     const { academicYear, subject, teacher } = req.query;
+//     const query = {};
+
+//     if (academicYear) query.academicYear = academicYear;
+//     if (subject) query.subject = subject;
+//     if (teacher) query.teacher = teacher;
+
+//     const classes = await Class.find(query)
+//       .populate('teacher')
+//       .populate('students')
+//       .populate('schedule.classroom')
+//       .sort({ createdAt: -1 });
+//     res.json(classes);
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+// Get all classes
+app.get('/api/classes', async (req, res) => {
   try {
     const { academicYear, subject, teacher } = req.query;
     const query = {};
@@ -9415,12 +9440,18 @@ app.get('/api/classes',  async (req, res) => {
       .populate('students')
       .populate('schedule.classroom')
       .sort({ createdAt: -1 });
-    res.json(classes);
+    
+    res.json({
+      success: true,
+      data: classes
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
   }
 });
-
 app.post('/api/accounting/transactions', async (req, res) => {
   try {
       const { type, amount, description, category, date, reference } = req.body;
@@ -10123,6 +10154,90 @@ app.get('/api/students/:id/classes',  async (req, res) => {
     res.json(student.classes || []);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Get students in a specific class
+app.get('/api/classes/:id', async (req, res) => {
+  try {
+    const classObj = await Class.findById(req.params.id)
+      .populate('teacher')
+      .populate('students')
+      .populate('schedule.classroom');
+    
+    if (!classObj) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الحصة غير موجودة' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: classObj
+    });
+  } catch (err) {
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+app.get('/api/classes/:id/students', async (req, res) => {
+  try {
+    const classId = req.params.id;
+    
+    const classObj = await Class.findById(classId).populate('students');
+    
+    if (!classObj) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الحصة غير موجودة' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: classObj.students || []
+    });
+  } catch (err) {
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// Get payments for a specific class
+app.get('/api/payments/class/:classId', async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const { status, month } = req.query;
+    
+    const query = { class: classId };
+    
+    if (status) query.status = status;
+    if (month) query.monthCode = month;
+    
+    const payments = await Payment.find(query)
+      .populate('student', 'name studentId parentPhone')
+      .populate('class', 'name subject price')
+      .populate('recordedBy', 'username fullName')
+      .sort({ month: -1, createdAt: -1 });
+    
+    res.json({
+      success: true,
+      payments: payments || [],
+      count: payments.length,
+      totalAmount: payments.reduce((sum, p) => sum + p.amount, 0)
+    });
+    
+  } catch (err) {
+    console.error('Error fetching class payments:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
   }
 });
 // Add this endpoint with your other student routes
