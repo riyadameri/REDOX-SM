@@ -31,7 +31,7 @@ const io = socketio(server, {
   },
   transports: ['websocket', 'polling'],
   path: '/socket.io/', // إضافة path لـ Render
-  serveClient: false
+  serveClient: true
 });
 
   // Middleware
@@ -43,18 +43,19 @@ const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
       'http://localhost:4200',
-      'http://localhost:3000',
-      'http://localhost:8080',
+      'https://localhost:4200',
       'http://redox-sm.onrender.com',
       'https://redox-sm.onrender.com',
-      'https://localhost:4200',
+      'http://localhost:3000',
       'https://localhost:3000',
-      'https://localhost:8080'
+      'http://localhost:8080',
     ];
     
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      console.log('CORS blocked for origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -64,23 +65,17 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+
 // Handle OPTIONS requests explicitly for all routes
 app.options('*', cors(corsOptions));
 // Handle OPTIONS requests (preflight)
 
 // إضافة middleware للتصحيح
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url} - Origin: ${req.headers.origin}`);
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - Origin: ${req.headers.origin}`);
   next();
 });
+
 
 
   app.use(express.json());
@@ -2542,22 +2537,54 @@ app.post('/api/classes',  async (req, res) => {
 
 
 // In your server.js file, change the authenticate middleware for this endpoint:
-app.get('/api/classes/:id', optionalAuth, async (req, res) => {
+app.get('/api/classes/:id', async (req, res) => {
   try {
-    const classObj = await Class.findById(req.params.id)
-      .populate('teacher')
-      .populate('students')
-      .populate('schedule.classroom');
+    console.log('=== REQUEST FOR CLASS DETAILS ===');
+    console.log('Class ID:', req.params.id);
+    console.log('Request URL:', req.url);
+    console.log('Headers:', req.headers);
     
-    if (!classObj) {
-      return res.status(404).json({ error: 'الحصة غير موجودة' });
+    const classId = req.params.id;
+    
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'معرف الحصة غير صالح',
+        id: classId
+      });
     }
     
-    res.json(classObj);
+    const classObj = await Class.findById(classId)
+      .populate('teacher', 'name phone email')
+      .populate('students', 'name studentId parentPhone parentEmail academicYear')
+      .populate('schedule.classroom', 'name location');
+    
+    if (!classObj) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الحصة غير موجودة',
+        id: classId
+      });
+    }
+    
+    console.log('Class found:', classObj.name);
+    
+    res.json({
+      success: true,
+      data: classObj,
+      message: 'تم تحميل تفاصيل الحصة بنجاح'
+    });
+    
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error fetching class details:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
   }
 });
+
 
   app.put('/api/classes/:id',  async (req, res) => {
     try {
@@ -6419,13 +6446,18 @@ app.get('/api/payments/student/:studentId',  async (req, res) => {
   });
 
 
-const angularPath = path.join(__dirname, 'dist/admin-app/browser');
-app.use(express.static(angularPath));
+  const angularPath = path.join(__dirname, 'dist/admin-app/browser');
+  app.use(express.static(angularPath));
 
   // Main application entry point
-app.get('^', (req, res) => {
-  res.sendFile(path.join(angularPath, 'index.html'));
-});
+  app.get('*', (req, res) => {
+    // Don't redirect API requests to Angular
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({ error: 'API endpoint not found' });
+    }
+    res.sendFile(path.join(angularPath, 'index.html'));
+  });
+  
 
   app.get('cards-auth',(req,res)=>{
     res.sendFile(path.join(__dirname, 'public', 'cards-auth.html'));
@@ -10183,9 +10215,123 @@ app.get('/api/classes/:id', async (req, res) => {
     });
   }
 });
+// Get students for a specific class
 app.get('/api/classes/:id/students', async (req, res) => {
   try {
     const classId = req.params.id;
+    
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'معرف الحصة غير صالح' 
+      });
+    }
+    
+    const classObj = await Class.findById(classId)
+      .populate('students', 'name studentId parentPhone parentEmail academicYear');
+    
+    if (!classObj) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الحصة غير موجودة' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: classObj.students || []
+    });
+    
+  } catch (err) {
+    console.error('Error fetching class students:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+// Get payments for a specific class
+app.get('/api/payments/class/:classId', async (req, res) => {
+  try {
+    console.log('Fetching payments for class:', req.params.classId);
+    
+    const classId = req.params.classId;
+    
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'معرف الحصة غير صالح'
+      });
+    }
+    
+    const query = { class: classId };
+    const { status, month } = req.query;
+    
+    if (status) query.status = status;
+    if (month) query.monthCode = month;
+    
+    const payments = await Payment.find(query)
+      .populate('student', 'name studentId')
+      .populate('class', 'name subject price')
+      .populate('recordedBy', 'username fullName')
+      .sort({ month: -1, createdAt: -1 });
+    
+    res.json({
+      success: true,
+      payments: payments || [],
+      count: payments.length,
+      totalAmount: payments.reduce((sum, p) => sum + (p.amount || 0), 0)
+    });
+    
+  } catch (err) {
+    console.error('Error fetching class payments:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+// Add this endpoint with your other student routes
+
+// Get lesson details with students and payments
+app.get('/api/classes/:id', async (req, res) => {
+  try {
+    const classId = req.params.id;
+    
+    console.log('Fetching class details for:', classId);
+    
+    const classObj = await Class.findById(classId)
+      .populate('teacher')
+      .populate('students')
+      .populate('schedule.classroom');
+    
+    if (!classObj) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الحصة غير موجودة' 
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: classObj
+    });
+  } catch (err) {
+    console.error('Error fetching class details:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// Get students in class
+app.get('/api/classes/:id/students', async (req, res) => {
+  try {
+    const classId = req.params.id;
+    
+    console.log('Fetching students for class:', classId);
     
     const classObj = await Class.findById(classId).populate('students');
     
@@ -10201,6 +10347,7 @@ app.get('/api/classes/:id/students', async (req, res) => {
       data: classObj.students || []
     });
   } catch (err) {
+    console.error('Error fetching class students:', err);
     res.status(500).json({ 
       success: false,
       error: err.message 
@@ -10208,11 +10355,13 @@ app.get('/api/classes/:id/students', async (req, res) => {
   }
 });
 
-// Get payments for a specific class
+// Get payments for class
 app.get('/api/payments/class/:classId', async (req, res) => {
   try {
     const { classId } = req.params;
     const { status, month } = req.query;
+    
+    console.log('Fetching payments for class:', classId);
     
     const query = { class: classId };
     
@@ -10240,4 +10389,4 @@ app.get('/api/payments/class/:classId', async (req, res) => {
     });
   }
 });
-// Add this endpoint with your other student routes
+
