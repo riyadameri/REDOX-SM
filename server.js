@@ -9776,6 +9776,10 @@ app.get('/api/accounting/daily-income',  async (req, res) => {
     });
   }
 });
+
+
+
+
 app.get('/api/accounting/weekly-income',  async (req, res) => {
   try {
       const today = new Date();
