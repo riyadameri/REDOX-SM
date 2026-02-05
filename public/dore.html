@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام تسجيل الحضور - أكاديمية الرواد</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <style>
+        :root {
+            --primary-color: #0d6efd;
+            --success-color: #198754;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        
+        .attendance-container {
+            width: 100vw;
+            height: 100vh;
+            background: white;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header-section {
+            background: linear-gradient(135deg, var(--primary-color), #4a6bdf);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        
+        .school-logo {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 3px solid white;
+            margin-bottom: 10px;
+            object-fit: cover;
+        }
+        
+        .current-time {
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        
+        .scanner-section {
+            padding: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        
+        .scanner-input {
+            font-size: 1.1rem;
+            text-align: center;
+            padding: 12px;
+            border: 2px dashed #dee2e6;
+            border-radius: 10px;
+            margin: 15px 0;
+            transition: all 0.3s ease;
+        }
+        
+        .scanner-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+        }
+        
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin: 8px 0;
+        }
+        
+        .status-ready {
+            background-color: #e8f5e8;
+            color: var(--success-color);
+        }
+        
+        .status-scanning {
+            background-color: #fff3cd;
+            color: var(--warning-color);
+        }
+        
+        .status-error {
+            background-color: #f8d7da;
+            color: var(--danger-color);
+        }
+        
+        .result-section {
+            padding: 15px;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+        
+        .student-card {
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        
+        .student-header {
+            background: linear-gradient(135deg, var(--success-color), #20c997);
+            color: white;
+            padding: 12px;
+            text-align: center;
+        }
+        
+        .student-details {
+            padding: 15px;
+        }
+        
+        .student-avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #dee2e6;
+            margin-bottom: 10px;
+        }
+        
+        .attendance-success {
+            background: linear-gradient(135deg, var(--success-color), #20c997);
+        }
+        
+        .attendance-late {
+            background: linear-gradient(135deg, var(--warning-color), #fd7e14);
+        }
+        
+        .attendance-error {
+            background: linear-gradient(135deg, var(--danger-color), #e83e8c);
+        }
+        
+        .recent-scans {
+            margin-top: 15px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .scan-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            border-bottom: 1px solid #f1f1f1;
+        }
+        
+        .scan-item:last-child {
+            border-bottom: none;
+        }
+        
+        .footer-section {
+            background-color: #f8f9fa;
+            padding: 10px;
+            text-align: center;
+            border-top: 1px solid #dee2e6;
+            flex-shrink: 0;
+        }
+        
+        .spinner-border {
+            width: 1.5rem;
+            height: 1.5rem;
+        }
+        
+        /* تحسينات للشاشات الصغيرة */
+        @media (max-height: 700px) {
+            .header-section {
+                padding: 10px;
+            }
+            
+            .school-logo {
+                width: 50px;
+                height: 50px;
+            }
+            
+            .scanner-section {
+                padding: 10px;
+            }
+            
+            .result-section {
+                padding: 10px;
+            }
+        }
+        
+        /* تحسينات للشاشات الكبيرة */
+        @media (min-width: 1200px) {
+            .attendance-container {
+                max-width: 1200px;
+                margin: 0 auto;
+                height: 95vh;
+                margin-top: 2.5vh;
+                border-radius: 15px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="attendance-container">
+        <!-- Header Section -->
+        <div class="header-section">
+            <div class="d-flex justify-content-center align-items-center">
+                <img src="https://via.placeholder.com/150" alt="شعار الأكاديمية" class="school-logo me-3">
+                <div>
+                    <h2 class="mb-1">أكاديمية الرواد للتعليم والمعارف</h2>
+                    <p class="mb-0">نظام تسجيل الحضور الآلي</p>
+                </div>
+            </div>
+            <div class="current-time" id="currentTime">
+                <i class="bi bi-clock me-2"></i>
+                <span id="timeDisplay">--:--:--</span>
+            </div>
+        </div>
+        
+        <!-- Scanner Section -->
+        <div class="scanner-section">
+            <h4 class="mb-3"><i class="bi bi-credit-card-2-front me-2"></i>مسح بطاقة الطالب</h4>
+            
+            <div class="status-indicator status-ready" id="scannerStatus">
+                <i class="bi bi-check-circle me-2"></i>
+                <span>جاهز للمسح</span>
+            </div>
+            
+            <input type="text" 
+                   class="form-control scanner-input" 
+                   id="cardInput" 
+                   placeholder="اضغط هنا وامسح البطاقة أو أدخل الرقم يدوياً"
+                   autocomplete="off"
+                   autofocus>
+            
+            <div class="mt-3">
+                <button class="btn btn-outline-primary me-2" onclick="manualAttendance()">
+                    <i class="bi bi-pencil-square me-1"></i> تسجيل يدوي
+                </button>
+                <button class="btn btn-outline-secondary" onclick="clearScanner()">
+                    <i class="bi bi-arrow-clockwise me-1"></i> إعادة تعيين
+                </button>
+            </div>
+        </div>
+        
+        <!-- Result Section -->
+        <div class="result-section">
+            <div id="scanResult">
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-credit-card-2-front display-1"></i>
+                    <p class="mt-3">سيظهر هنا نتيجة مسح البطاقة</p>
+                </div>
+            </div>
+            
+            <!-- Recent Scans -->
+            <div class="recent-scans card">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>آخر عمليات المسح</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div id="recentScansList">
+                        <div class="scan-item text-muted">
+                            <span>لا توجد عمليات مسح حديثة</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer Section -->
+        <div class="footer-section">
+            <p class="mb-0 text-muted">
+                <small>
+                    <i class="bi bi-c-circle me-1"></i>
+                    نظام Redox - أكاديمية الرواد للتعليم والمعارف
+                    <span id="currentYear"></span>
+                </small>
+            </p>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Socket.io -->
+    <script src="/socket.io/socket.io.js"></script>
+    
+    <script>
+        // المتغيرات العامة
+        let socket;
+        let recentScans = [];
+        let currentClass = null;
+        
+        // تهيئة التطبيق عند تحميل الصفحة
+        document.addEventListener('DOMContentLoaded', function() {
+            initApp();
+        });
+        
+        // تهيئة التطبيق
+        function initApp() {
+            // تحديث السنة الحالية
+            document.getElementById('currentYear').textContent = new Date().getFullYear();
+            
+            // بدء تحديث الوقت
+            updateCurrentTime();
+            setInterval(updateCurrentTime, 1000);
+            
+            // الاتصال بالسيرفر
+            connectToServer();
+            
+            // تهيئة نظام مسح البطاقات
+            setupCardScanner();
+            
+            // تحميل الحصة الجارية
+            loadCurrentClass();
+            
+            // تحميل السجلات الحديثة من التخزين المحلي
+            loadRecentScans();
+        }
+        
+        // تحديث الوقت الحالي
+        function updateCurrentTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('ar-EG');
+            const dateString = now.toLocaleDateString('ar-EG', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+            
+            document.getElementById('timeDisplay').textContent = timeString;
+        }
+        
+        // الاتصال بالسيرفر
+        function connectToServer() {
+            try {
+                socket = io(window.location.origin);
+                
+                socket.on('connect', function() {
+                    updateScannerStatus('متصل', 'status-ready');
+                });
+                
+                socket.on('disconnect', function() {
+                    updateScannerStatus('غير متصل', 'status-error');
+                });
+                
+                // استقبال بيانات البطاقات من السيرفر
+                socket.on('student-detected', function(data) {
+                    handleStudentDetection(data);
+                });
+                
+                socket.on('unknown-card', function(data) {
+                    showUnknownCard(data.uid);
+                });
+                
+            } catch (error) {
+                console.error('خطأ في الاتصال بالسيرفر:', error);
+                updateScannerStatus('خطأ في الاتصال', 'status-error');
+            }
+        }
+        
+        // تهيئة نظام مسح البطاقات
+        function setupCardScanner() {
+            const cardInput = document.getElementById('cardInput');
+            let cardBuffer = '';
+            let lastKeyTime = Date.now();
+            
+            // معالجة الإدخال اليدوي
+            cardInput.addEventListener('input', function(e) {
+                const cardId = e.target.value.trim();
+                if (cardId.length >= 6) {
+                    processCardScan(cardId);
+                }
+            });
+            
+            // معالجة الضغط على Enter
+            cardInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const cardId = e.target.value.trim();
+                    if (cardId) {
+                        processCardScan(cardId);
+                    }
+                }
+            });
+            
+            // محاكاة قارئ البطاقات (الاستماع للإدخال السريع)
+            document.addEventListener('keydown', function(event) {
+                // تجاهل إذا كان المستخدم يكتب في حقل آخر
+                if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+                    return;
+                }
+                
+                const currentTime = Date.now();
+                const key = event.key;
+                
+                // إعادة تعيين المخزن المؤقت إذا مر وقت طويل منذ آخر ضغطة
+                if (currentTime - lastKeyTime > 100) {
+                    cardBuffer = '';
+                }
+                
+                lastKeyTime = currentTime;
+                
+                // إذا تم الضغط على Enter، معالجة البطاقة
+                if (key === 'Enter') {
+                    event.preventDefault();
+                    
+                    if (cardBuffer.length > 0) {
+                        processCardScan(cardBuffer);
+                        cardBuffer = '';
+                        cardInput.value = '';
+                    }
+                } 
+                // إذا كان رقم، إضافته للمخزن المؤقت
+                else if (key >= '0' && key <= '9') {
+                    cardBuffer += key;
+                    cardInput.value = cardBuffer;
+                }
+            });
+        }
+        
+        // معالجة مسح البطاقة
+        async function processCardScan(cardUid) {
+            try {
+                // تحديث حالة الماسح
+                updateScannerStatus('جاري التعرف على البطاقة...', 'status-scanning');
+                
+                // إظهار مؤشر التحميل
+                showLoadingState();
+                
+                // تشغيل صوت المسح
+                playScanSound();
+                
+                // إرسال طلب للخادم للتعرف على البطاقة
+                const response = await fetch(`/api/cards/uid/${cardUid}`, {
+                    headers: getAuthHeaders()
+                });
+                
+                if (response.status === 404) {
+                    // بطاقة غير معروفة
+                    showUnknownCard(cardUid);
+                    return;
+                }
+                
+                if (!response.ok) {
+                    throw new Error('خطأ في استجابة الخادم');
+                }
+                
+                const cardData = await response.json();
+                
+                if (cardData.student) {
+                    // جلب معلومات الطالب الكاملة
+                    const studentResponse = await fetch(`/api/students/${cardData.student._id}`, {
+                        headers: getAuthHeaders()
+                    });
+                    
+                    if (studentResponse.ok) {
+                        const student = await studentResponse.json();
+                        await handleStudentCard(student, cardUid);
+                    }
+                }
+                
+            } catch (error) {
+                console.error('خطأ في معالجة البطاقة:', error);
+                showErrorResult('حدث خطأ أثناء معالجة البطاقة');
+            } finally {
+                // إعادة تعيين حالة الماسح
+                setTimeout(() => {
+                    updateScannerStatus('جاهز للمسح', 'status-ready');
+                }, 2000);
+            }
+        }
+        
+        // معالجة بطاقة طالب معروف
+        async function handleStudentCard(student, cardUid) {
+            try {
+                // عرض معلومات الطالب
+                displayStudentInfo(student, cardUid);
+                
+                // إضافة إلى السجلات الحديثة
+                addToRecentScans('student', {
+                    student: student,
+                    cardNumber: cardUid,
+                    timestamp: new Date().toISOString()
+                });
+                
+                // محاولة تسجيل الحضور تلقائياً
+                await registerAttendance(student._id, cardUid);
+                
+            } catch (error) {
+                console.error('خطأ في معالجة بطاقة الطالب:', error);
+            }
+        }
+        
+        // تسجيل الحضور
+        async function registerAttendance(studentId, cardUid) {
+            try {
+                // البحث عن الحصص الجارية
+                const today = new Date().toISOString().split('T')[0];
+                const response = await fetch(`/api/live-classes?status=ongoing&date=${today}`, {
+                    headers: getAuthHeaders()
+                });
+                
+                if (!response.ok) {
+                    throw new Error('فشل في جلب الحصص الجارية');
+                }
+                
+                const liveClasses = await response.json();
+                
+                if (liveClasses.length === 0) {
+                    showNoClassMessage();
+                    return;
+                }
+                
+                // استخدام أول حصة جارية
+                const liveClass = liveClasses[0];
+                
+                // تحديد حالة الحضور (حاضر/متأخر)
+                let attendanceStatus = 'present';
+                if (isLate(liveClass.startTime)) {
+                    attendanceStatus = 'late';
+                }
+                
+                // تسجيل الحضور
+                const attendanceResponse = await fetch(`/api/live-classes/${liveClass._id}/attendance`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
+                    },
+                    body: JSON.stringify({
+                        studentId: studentId,
+                        status: attendanceStatus,
+                        method: 'gate'
+                    })
+                });
+                
+                if (attendanceResponse.ok) {
+                    const result = await attendanceResponse.json();
+                    showAttendanceSuccess(result, attendanceStatus, liveClass);
+                } else {
+                    const errorData = await attendanceResponse.json();
+                    throw new Error(errorData.error || 'فشل في تسجيل الحضور');
+                }
+                
+            } catch (error) {
+                console.error('خطأ في تسجيل الحضور:', error);
+                showAttendanceError(error.message);
+            }
+        }
+        
+        // التحقق إذا كان الطالب متأخراً
+        function isLate(classStartTime, maxDelayMinutes = 30) {
+            if (!classStartTime) return false;
+            
+            const now = new Date();
+            const currentTime = now.getHours() * 60 + now.getMinutes();
+            
+            const [startHours, startMinutes] = classStartTime.split(':').map(Number);
+            const classStartMinutes = startHours * 60 + startMinutes;
+            
+            const allowedLateTime = classStartMinutes + maxDelayMinutes;
+            
+            return currentTime > allowedLateTime;
+        }
+        
+        // عرض معلومات الطالب
+        function displayStudentInfo(student, cardUid) {
+            const resultElement = document.getElementById('scanResult');
+            
+            // استخدام صورة افتراضية من الإنترنت
+            const studentImage = student.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name)}&background=3498db&color=fff&size=100`;
+            
+            resultElement.innerHTML = `
+                <div class="student-card">
+                    <div class="student-header">
+                        <h5 class="mb-1">تم التعرف على الطالب</h5>
+                        <p class="mb-0">رقم البطاقة: ${cardUid}</p>
+                    </div>
+                    <div class="student-details">
+                        <div class="row">
+                            <div class="col-md-4 text-center">
+                                <img src="${studentImage}" 
+                                     class="student-avatar" alt="صورة الطالب">
+                                <h5>${student.name}</h5>
+                                <p class="text-muted">${student.studentId}</p>
+                            </div>
+                            <div class="col-md-8">
+                                <div class="mb-3">
+                                    <strong>معلومات الطالب:</strong>
+                                    <p class="mb-1">الصف: ${getAcademicYearName(student.academicYear) || 'غير محدد'}</p>
+                                    <p class="mb-1">ولي الأمر: ${student.parentName || 'غير محدد'}</p>
+                                    <p class="mb-0">هاتف ولي الأمر: ${student.parentPhone || 'غير محدد'}</p>
+                                </div>
+                                <div class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">جاري تسجيل الحضور...</span>
+                                    </div>
+                                    <p class="mt-2">جاري تسجيل الحضور...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // عرض نجاح تسجيل الحضور
+        function showAttendanceSuccess(result, status, liveClass) {
+            const resultElement = document.getElementById('scanResult');
+            const statusClass = status === 'late' ? 'attendance-late' : 'attendance-success';
+            const statusText = status === 'late' ? 'متأخر' : 'حاضر';
+            
+            // تشغيل صوت النجاح
+            playSuccessSound();
+            
+            resultElement.innerHTML = `
+                <div class="student-card">
+                    <div class="student-header ${statusClass}">
+                        <h5 class="mb-1"><i class="bi bi-check-circle me-2"></i>تم تسجيل الحضور</h5>
+                        <p class="mb-0">الحالة: ${statusText}</p>
+                    </div>
+                    <div class="student-details">
+                        <div class="text-center">
+                            <h5>${result.student.name}</h5>
+                            <p class="mb-2">${liveClass.class.name}</p>
+                            <p class="mb-2">${new Date().toLocaleTimeString('ar-EG')}</p>
+                            <button class="btn btn-outline-primary mt-2" onclick="printReceipt('${result._id}')">
+                                <i class="bi bi-printer me-1"></i> طباعة الإيصال
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // عرض بطاقة غير معروفة
+        function showUnknownCard(cardUid) {
+            const resultElement = document.getElementById('scanResult');
+            
+            // تشغيل صوت الخطأ
+            playErrorSound();
+            
+            resultElement.innerHTML = `
+                <div class="student-card">
+                    <div class="student-header attendance-error">
+                        <h5 class="mb-1"><i class="bi bi-exclamation-triangle me-2"></i>بطاقة غير معروفة</h5>
+                    </div>
+                    <div class="student-details text-center">
+                        <i class="bi bi-credit-card-2-front display-1 text-muted"></i>
+                        <h5 class="mt-3">رقم البطاقة: ${cardUid}</h5>
+                        <p class="text-muted">هذه البطاقة غير مسجلة في النظام</p>
+                        <button class="btn btn-primary" onclick="assignCard('${cardUid}')">
+                            <i class="bi bi-link me-1"></i> ربط البطاقة بطالب
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // إضافة إلى السجلات الحديثة
+            addToRecentScans('unknown', {
+                cardNumber: cardUid,
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        // عرض حالة التحميل
+        function showLoadingState() {
+            const resultElement = document.getElementById('scanResult');
+            
+            resultElement.innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">جاري المعالجة...</span>
+                    </div>
+                    <p class="mt-3">جاري التعرف على البطاقة...</p>
+                </div>
+            `;
+        }
+        
+        // عرض خطأ
+        function showErrorResult(message) {
+            const resultElement = document.getElementById('scanResult');
+            
+            resultElement.innerHTML = `
+                <div class="alert alert-danger text-center">
+                    <i class="bi bi-x-circle display-4"></i>
+                    <h5 class="mt-3">حدث خطأ</h5>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+        
+        // عرض رسالة عدم وجود حصص
+        function showNoClassMessage() {
+            const resultElement = document.getElementById('scanResult');
+            const studentCard = resultElement.querySelector('.student-card');
+            
+            if (studentCard) {
+                const detailsSection = studentCard.querySelector('.student-details');
+                detailsSection.innerHTML = `
+                    <div class="alert alert-warning text-center">
+                        <i class="bi bi-info-circle me-2"></i>
+                        لا توجد حصص جارية حالياً
+                    </div>
+                `;
+            }
+        }
+        
+        // تحديث حالة الماسح
+        function updateScannerStatus(status, statusClass) {
+            const statusElement = document.getElementById('scannerStatus');
+            statusElement.className = `status-indicator ${statusClass}`;
+            statusElement.innerHTML = `
+                <i class="bi bi-${statusClass === 'status-ready' ? 'check-circle' : 
+                                  statusClass === 'status-scanning' ? 'arrow-repeat' : 
+                                  'exclamation-triangle'} me-2"></i>
+                <span>${status}</span>
+            `;
+        }
+        
+        // إضافة إلى السجلات الحديثة
+        function addToRecentScans(type, data) {
+            // إضافة المسح الجديد
+            recentScans.unshift({
+                type: type,
+                data: data,
+                timestamp: new Date().toISOString()
+            });
+            
+            // الاحتفاظ فقط بآخر 5 مسحات
+            if (recentScans.length > 5) {
+                recentScans.pop();
+            }
+            
+            // حفظ في التخزين المحلي
+            localStorage.setItem('gateRecentScans', JSON.stringify(recentScans));
+            
+            // تحديث العرض
+            updateRecentScansList();
+        }
+        
+        // تحديث قائمة السجلات الحديثة
+        function updateRecentScansList() {
+            const listElement = document.getElementById('recentScansList');
+            
+            if (recentScans.length === 0) {
+                listElement.innerHTML = `
+                    <div class="scan-item text-muted">
+                        <span>لا توجد عمليات مسح حديثة</span>
+                    </div>
+                `;
+                return;
+            }
+            
+            listElement.innerHTML = '';
+            
+            recentScans.forEach((scan, index) => {
+                const item = document.createElement('div');
+                item.className = 'scan-item';
+                
+                if (scan.type === 'student') {
+                    item.innerHTML = `
+                        <div>
+                            <strong>${scan.data.student.name}</strong>
+                            <br>
+                            <small class="text-muted">${scan.data.student.studentId}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-success">حضور</span>
+                            <br>
+                            <small>${new Date(scan.timestamp).toLocaleTimeString('ar-EG')}</small>
+                        </div>
+                    `;
+                } else {
+                    item.innerHTML = `
+                        <div>
+                            <strong>بطاقة غير معروفة</strong>
+                            <br>
+                            <small class="text-muted">${scan.data.cardNumber}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-warning">غير معروف</span>
+                            <br>
+                            <small>${new Date(scan.timestamp).toLocaleTimeString('ar-EG')}</small>
+                        </div>
+                    `;
+                }
+                
+                listElement.appendChild(item);
+            });
+        }
+        
+        // تحميل السجلات الحديثة من التخزين المحلي
+        function loadRecentScans() {
+            const savedScans = localStorage.getItem('gateRecentScans');
+            if (savedScans) {
+                recentScans = JSON.parse(savedScans);
+                updateRecentScansList();
+            }
+        }
+        
+        // تحميل الحصة الجارية
+        async function loadCurrentClass() {
+            try {
+                const today = new Date().toISOString().split('T')[0];
+                const response = await fetch(`/api/live-classes?status=ongoing&date=${today}`, {
+                    headers: getAuthHeaders()
+                });
+                
+                if (response.ok) {
+                    const liveClasses = await response.json();
+                    if (liveClasses.length > 0) {
+                        currentClass = liveClasses[0];
+                    }
+                }
+            } catch (error) {
+                console.error('خطأ في تحميل الحصة الجارية:', error);
+            }
+        }
+        
+        // الحصول على رؤوس المصادقة
+        function getAuthHeaders() {
+            const token = localStorage.getItem('token');
+            return {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            };
+        }
+        
+        // الحصول على اسم السنة الدراسية
+        function getAcademicYearName(code) {
+            if (!code || code === 'NS' || code === 'غير محدد') return 'غير محدد';
+            
+            const years = {
+                '1AS': 'الأولى ثانوي',
+                '2AS': 'الثانية ثانوي',
+                '3AS': 'الثالثة ثانوي',
+                '1MS': 'الأولى متوسط',
+                '2MS': 'الثانية متوسط',
+                '3MS': 'الثالثة متوسط',
+                '4MS': 'الرابعة متوسط',
+                '1AP': 'الأولى ابتدائي',
+                '2AP': 'الثانية ابتدائي',
+                '3AP': 'الثالثة ابتدائي',
+                '4AP': 'الرابعة ابتدائي',
+                '5AP': 'الخامسة ابتدائي'
+            };
+            
+            return years[code] || code;
+        }
+        
+        // وظائف الأصوات
+        function playScanSound() {
+            // إنشاء صوت المسح باستخدام Web Audio API
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.value = 800;
+            gainNode.gain.value = 0.1;
+            
+            oscillator.start();
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+            oscillator.stop(audioContext.currentTime + 0.3);
+        }
+        
+        function playSuccessSound() {
+            // إنشاء صوت النجاح باستخدام Web Audio API
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
+            oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1); // E5
+            oscillator.frequency.setValueAtTime(783.99, audioContext.currentTime + 0.2); // G5
+            
+            gainNode.gain.value = 0.1;
+            
+            oscillator.start();
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.4);
+            oscillator.stop(audioContext.currentTime + 0.4);
+        }
+        
+        function playErrorSound() {
+            // إنشاء صوت الخطأ باستخدام Web Audio API
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+            oscillator.frequency.setValueAtTime(150, audioContext.currentTime + 0.2);
+            
+            gainNode.gain.value = 0.1;
+            
+            oscillator.start();
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.4);
+            oscillator.stop(audioContext.currentTime + 0.4);
+        }
+        
+        // وظائف المساعدة
+        
+        function clearScanner() {
+            document.getElementById('cardInput').value = '';
+            document.getElementById('scanResult').innerHTML = `
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-credit-card-2-front display-1"></i>
+                    <p class="mt-3">سيظهر هنا نتيجة مسح البطاقة</p>
+                </div>
+            `;
+            document.getElementById('cardInput').focus();
+        }
+        
+        function manualAttendance() {
+            alert('سيتم فتح نافذة التسجيل اليدوي');
+            // يمكن تنفيذ واجهة التسجيل اليدوي هنا
+        }
+        
+        function assignCard(cardUid) {
+            alert(`سيتم فتح نافذة لربط البطاقة ${cardUid} بطالب`);
+            // يمكن تنفيذ واجهة ربط البطاقة هنا
+        }
+        
+        function printReceipt(attendanceId) {
+            alert(`سيتم طباعة إيصال الحضور ${attendanceId}`);
+            // يمكن تنفيذ وظيفة الطباعة هنا
+        }
+        
+        // معالجة اكتشاف الطالب من السيرفر
+        function handleStudentDetection(data) {
+            if (data.student) {
+                handleStudentCard(data.student, data.card.uid);
+            }
+        }
+    </script>
+</body>
+</html>

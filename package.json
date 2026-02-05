@@ -11,8 +11,9 @@
   "dependencies": {
     "@faker-js/faker": "^9.8.0",
     "@fortawesome/fontawesome-free": "^7.0.0",
+    "@infobip-api/sdk": "^0.3.2",
     "@serialport/parser-readline": "^13.0.0",
-    "axios": "^1.9.0",
+    "axios": "^1.13.4",
     "bcryptjs": "^3.0.2",
     "body-parser": "^2.2.0",
     "bootstrap": "^5.3.7",

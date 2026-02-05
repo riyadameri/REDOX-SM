@@ -2,10 +2,15 @@ const axios = require('axios');
 
 class SMSGateway {
 
+  /**
+   * Constructor for SMSGateway class
+   * Initializes SMS gateway with required configuration
+   * @constructor
+   */
   constructor() {
     this.config = {
-      baseUrl: '55v9kd.api.infobip.com',
-      apiKey: '6dfebb0501cdeeba40e3cff12277e1b1-0014b46c-8873-46dc-8c65-e3c286d52bd4',
+      baseUrl: 'https://3dvjnm.api.infobip.com',
+      apiKey: '54d821dd2a75bacd6e4bdbe5a020579a-19a2298b-a8f8-44bb-a624-53268d4aa47e',
       senderName: 'Rdx Tta3limi',
       messagetype: 'TRANSACTIONAL'
     };
@@ -71,11 +76,11 @@ class SMSGateway {
             from: this.config.senderName,
             destinations: [{ to: cleanNumber }],
             text: message,
-            messagetype: 'TRANSACTIONAL',
-            
+            messageType: this.config.messagetype  // Transactional
           }
         ]
       };
+      
 
       console.log('📤 إرسال طلب إلى Infobip...');
       const response = await this.axiosInstance.post('/sms/2/text/advanced', payload);

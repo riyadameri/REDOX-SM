@@ -10,27 +10,21 @@ require('dotenv').config();
   const jwt = require('jsonwebtoken');
   const bcrypt = require('bcryptjs');
   const nodemailer = require('nodemailer');
-  const smsGateway = require('./sms-gateway');
-  const ExcelJS = require('exceljs');
+  const smsGateway = require('./sms-gateway-alternative');
+    const ExcelJS = require('exceljs');
   const app = express();
   const server = require('http').createServer(app);
 
 // تحديث إعدادات Socket.IO
 const io = socketio(server, {
   cors: {
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    origin: '*',  // Allow all origins temporarily
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization']
   },
   transports: ['websocket', 'polling'],
-  path: '/socket.io/', // إضافة path لـ Render
+  path: '/socket.io/',
   serveClient: true
 });
 
@@ -40,33 +34,12 @@ const io = socketio(server, {
 // Use this CORS configuration instead:
 // Remove duplicate CORS middleware and keep only one
 const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:4200',
-      'https://localhost:4200',
-      'http://redox-sm.onrender.com',
-      'https://redox-sm.onrender.com',
-      'http://localhost:3000',
-      'https://localhost:3000',
-      'http://localhost:8080',
-    ];
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log('CORS blocked for origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: '*',  // Allow all origins temporarily
   credentials: true,
   optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
-
-
-// Handle OPTIONS requests explicitly for all routes
 app.options('*', cors(corsOptions));
 // Handle OPTIONS requests (preflight)
 
@@ -5522,16 +5495,23 @@ app.put('/api/payments/:id/amount', async (req, res) => {
     }
   });
 
-  app.post('/api/live-classes',  async (req, res) => {
+  app.post('/api/live-classes', async (req, res) => {
     try {
-      const liveClass = new LiveClass({
-        ...req.body,
-        createdBy: req.user.id
-      });
+      console.log('Received live class creation request:', req.body);
       
+      // Auto-generate missing required fields
+      const liveClassData = {
+        ...req.body,
+        month: req.body.month || new Date(req.body.date).toISOString().slice(0, 7),
+        createdBy: req.body.createdBy || new mongoose.Types.ObjectId(), // Temporary for testing
+        status: req.body.status || 'scheduled'
+      };
+      
+      console.log('Processed live class data:', liveClassData);
+      
+      const liveClass = new LiveClass(liveClassData);
       await liveClass.save();
       
-      // Populate the saved data for response
       const populated = await LiveClass.findById(liveClass._id)
         .populate('class')
         .populate('teacher')
@@ -5539,11 +5519,16 @@ app.put('/api/payments/:id/amount', async (req, res) => {
       
       res.status(201).json(populated);
     } catch (err) {
-      res.status(400).json({ error: err.message });
+      console.error('Error creating live class:', err);
+      console.error('Validation errors:', err.errors);
+      
+      res.status(400).json({ 
+        error: err.message,
+        validationErrors: err.errors 
+      });
     }
   });
-
-  app.put('/api/live-classes/:id',  async (req, res) => {
+    app.put('/api/live-classes/:id',  async (req, res) => {
     try {
       const liveClass = await LiveClass.findByIdAndUpdate(
         req.params.id,
@@ -5580,212 +5565,444 @@ app.put('/api/payments/:id/amount', async (req, res) => {
 
   // Auto Mark Absent , student hows not attendance  on lesson 
 
-  app.post('/api/live-classes/:id/auto-mark-absent',  async (req, res) => {
-    try {
-      const liveClassId = req.params.id;
-      
-      // Get the live class with populated students
-      const liveClass = await LiveClass.findById(liveClassId)
-        .populate({
-          path: 'class',
-          populate: {
-            path: 'students',
-            model: 'Student'
-          }
-        })
-        .populate('attendance.student');
-
-      if (!liveClass) {
-        return res.status(404).json({ error: 'الحصة غير موجودة' });
-      }
-
-      if (liveClass.status !== 'completed') {
-        return res.status(400).json({ error: 'الحصة لم تنته بعد' });
-      }
-
-      // Get all students enrolled in this class
-      const enrolledStudents = liveClass.class.students || [];
-      
-      // Get students who have already been marked as present/late
-      const attendedStudents = liveClass.attendance.map(att => att.student._id.toString());
-      
-      // Find students who haven't attended (absent)
-      const absentStudents = enrolledStudents.filter(student => 
-        !attendedStudents.includes(student._id.toString())
-      );
-
-      // Mark absent students
-      const absentRecords = [];
-      for (const student of absentStudents) {
-        // Check if student already has an attendance record
-        const existingAttendanceIndex = liveClass.attendance.findIndex(
-          att => att.student._id.toString() === student._id.toString()
-        );
-
-        if (existingAttendanceIndex === -1) {
-          // Add absent record
-          liveClass.attendance.push({
-            student: student._id,
-            status: 'absent',
-            joinedAt: null,
-            leftAt: null
-          });
-          absentRecords.push(student.name);
-        }
-      }
-
-      // Save the updated live class
-      await liveClass.save();
-
-      // Send notifications to parents of absent students
-      if (absentRecords.length > 0) {
-        await sendAbsenceNotifications(absentStudents, liveClass);
-      }
-
-      res.json({
-        message: `تم تسجيل ${absentRecords.length} طالب كغائبين`,
-        absentStudents: absentRecords,
-        totalEnrolled: enrolledStudents.length,
-        totalAttended: attendedStudents.length,
-        totalAbsent: absentRecords.length
-      });
-
-    } catch (err) {
-      console.error('Error in auto-mark-absent:', err);
-      res.status(500).json({ error: 'حدث خطأ أثناء تسجيل الغائبين' });
-    }
-  });
-
-  // Helper function to send absence notifications
-  async function sendAbsenceNotifications(absentStudents, liveClass) {
-    const absentStudentIds = absentStudents.map(student => student._id);
+// في server.js، قم بتحديث هذا الكود
+// تغيير هذا الكود في server.js
+// تغيير هذا الكود في server.js
+app.post('/api/live-classes/:id/auto-mark-absent', async (req, res) => {
+  try {
+    const liveClassId = req.params.id;
+    const { autoSendSMS = true, customMessage } = req.body;
     
-    try {
-      // Get detailed student information with parent contacts
-      const students = await Student.find({ 
-        _id: { $in: absentStudentIds } 
-      }).select('name parentPhone parentEmail');
+    console.log(`=== تسجيل الغياب التلقائي وإرسال رسائل ${liveClassId} ===`);
 
-      for (const student of students) {
-        if (student.parentPhone) {
-          const smsContent = `تنبيه: الطالب ${student.name} غائب عن حصة ${liveClass.class.name} بتاريخ ${new Date(liveClass.date).toLocaleDateString('ar-EG')}`;
-          
-          try {
-            await smsGateway.send(student.parentPhone, smsContent);
-            
-            // Record the message
-            await Message.create({
-              sender: null, // System message
+    // الحصول على الحصة الحية
+    const liveClass = await LiveClass.findById(liveClassId)
+      .populate({
+        path: 'class',
+        populate: {
+          path: 'students',
+          model: 'Student',
+          select: 'name studentId parentPhone parentEmail academicYear'
+        }
+      })
+      .populate('teacher');
+
+    if (!liveClass) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الحصة غير موجودة' 
+      });
+    }
+
+    // جلب جميع الطلاب المسجلين
+    const classObj = await Class.findById(liveClass.class._id)
+      .populate('students', 'name studentId parentPhone parentEmail academicYear');
+
+    if (!classObj) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الحصة الأصلية غير موجودة' 
+      });
+    }
+
+    const allStudents = classObj.students;
+    const presentStudents = liveClass.attendance
+      .filter(att => att.status === 'present' || att.status === 'late')
+      .map(att => att.student._id.toString());
+
+    // تحديد الطلاب الغائبين
+    const absentStudents = allStudents.filter(student => 
+      !presentStudents.includes(student._id.toString())
+    );
+
+    // إرسال رسائل للغائبين إذا كان الخيار مفعلاً
+    const results = {
+      totalStudents: allStudents.length,
+      presentCount: presentStudents.length,
+      absentCount: absentStudents.length,
+      absentStudents: [],
+      messagesSent: 0,
+      failedMessages: []
+    };
+
+    if (autoSendSMS && absentStudents.length > 0) {
+      console.log(`📱 إرسال رسائل للطلاب الغائبين...`);
+
+      for (const student of absentStudents) {
+        try {
+          if (student.parentPhone) {
+            // نص الرسالة الافتراضي أو المخصص
+            const message = customMessage || 
+              `عزيزي ولي أمر الطالب ${student.name}، نود إعلامكم أن الطالب غائب عن حصة ${liveClass.class.name} بتاريخ ${new Date(liveClass.date).toLocaleDateString('ar-EG')}. نرجو التواصل مع الإدارة لمعرفة السبب.`;
+
+            // إرسال الرسالة
+            const smsResult = await smsGateway.sendIndividualSMS(
+              student.parentPhone,
+              message
+            );
+
+            // حفظ سجل الرسالة في قاعدة البيانات
+            const messageRecord = new Message({
+              sender: req.user.id,
               recipients: [{
                 student: student._id,
-                parentPhone: student.parentPhone
+                parentPhone: student.parentPhone,
+                parentEmail: student.parentEmail
               }],
               class: liveClass.class._id,
-              content: smsContent,
+              content: message,
+              messageType: 'individual',
+              status: smsResult.success ? 'sent' : 'failed'
+            });
+            await messageRecord.save();
+
+            results.absentStudents.push({
+              studentId: student._id,
+              name: student.name,
+              parentPhone: student.parentPhone,
+              messageSent: smsResult.success,
+              message: smsResult.success ? 'تم الإرسال' : 'فشل الإرسال'
+            });
+
+            if (smsResult.success) {
+              results.messagesSent++;
+            } else {
+              results.failedMessages.push({
+                student: student.name,
+                phone: student.parentPhone,
+                error: smsResult.error
+              });
+            }
+          }
+        } catch (error) {
+          console.error(`❌ خطأ في إرسال رسالة للطالب ${student.name}:`, error);
+          results.failedMessages.push({
+            student: student.name,
+            phone: student.parentPhone,
+            error: error.message
+          });
+        }
+      }
+    }
+
+    // ... باقي الكود ...
+    
+  } catch (err) {
+    console.error('❌ خطأ في تسجيل الغياب التلقائي:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// في server.js، تحديث نقطة النهاية /api/live-classes/:id/attendance
+// تحديث نقطة النهاية لتسجيل الغياب وإرسال SMS
+const axios = require('axios');
+
+app.post('/api/live-classes/:id/attendance', async (req, res) => {
+  try {
+    const liveClassId = req.params.id;
+    const { studentId, status, method, sendSMS = true, customMessage } = req.body;
+
+    console.log(`📝 تسجيل حضور/غياب للحصة ${liveClassId} للطالب ${studentId} - الحالة: ${status}`);
+    
+    // التحقق من صحة الـ ID
+    if (!mongoose.Types.ObjectId.isValid(liveClassId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'معرف الحصة غير صالح'
+      });
+    }
+
+    // البحث عن الحصة الحية
+    const liveClass = await LiveClass.findById(liveClassId)
+      .populate('class', 'name subject')
+      .populate('teacher', 'name');
+
+    if (!liveClass) {
+      return res.status(404).json({
+        success: false,
+        error: 'الحصة الحية غير موجودة'
+      });
+    }
+
+    // العثور على الطالب
+    let student;
+    if (method === 'rfid') {
+      const card = await Card.findOne({ uid: studentId }).populate('student');
+      if (!card) {
+        return res.status(404).json({
+          success: false,
+          error: 'البطاقة غير مسجلة'
+        });
+      }
+      student = card.student;
+    } else {
+      student = await Student.findById(studentId);
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          error: 'الطالب غير موجود'
+        });
+      }
+    }
+
+    // التحقق من تسجيل الطالب في الحصة
+    if (liveClass.class) {
+      const classObj = await Class.findById(liveClass.class._id);
+      if (classObj) {
+        const isEnrolled = classObj.students.some((s) =>
+          s.toString() === student._id.toString()
+        );
+        
+        if (!isEnrolled) {
+          return res.status(400).json({
+            success: false,
+            error: 'الطالب غير مسجل في هذه الحصة'
+          });
+        }
+      }
+    }
+
+    // إنشاء أو تحديث سجل الحضور
+    const existingIndex = liveClass.attendance.findIndex((a) =>
+      a.student.toString() === student._id.toString()
+    );
+
+    const attendanceRecord = {
+      student: student._id,
+      status: status || 'present',
+      method: method || 'manual',
+      timestamp: new Date(),
+      joinedAt: (status === 'present' || status === 'late') ? new Date() : null
+    };
+
+    if (existingIndex >= 0) {
+      liveClass.attendance[existingIndex] = attendanceRecord;
+    } else {
+      liveClass.attendance.push(attendanceRecord);
+    }
+
+    await liveClass.save();
+
+    // إرسال SMS في حالة الغياب
+    const smsResult = {
+      sent: false,
+      error: null,
+      message: null
+    };
+
+    if (sendSMS && status === 'absent' && student.parentPhone) {
+      try {
+        const cleanPhone = student.parentPhone.trim();
+        let formattedPhone = cleanPhone;
+        
+        // تنسيق رقم الهاتف
+        if (!formattedPhone.startsWith('+')) {
+          if (formattedPhone.startsWith('0')) {
+            formattedPhone = '+213' + formattedPhone.substring(1);
+          } else {
+            formattedPhone = '+213' + formattedPhone;
+          }
+        }
+
+        // إنشاء نص الرسالة
+        const smsMessage = customMessage || `Absence Notice: Dear parent of ${student.name}, student was absent from ${liveClass.class?.name || 'school'} class on ${new Date(liveClass.date).toLocaleDateString('en-GB')} at ${liveClass.startTime}. Teacher: ${liveClass.teacher?.name || 'N/A'}. Please contact administration.`;
+        console.log(`📱 إرسال رسالة غياب إلى: ${formattedPhone}`);
+
+        // إرسال الرسالة باستخدام Infobip
+        const smsResponse = await smsGateway.sendIndividualSMS(formattedPhone, smsMessage);
+
+        if (smsResponse.success) {
+          smsResult.sent = true;
+          console.log(`✅ تم إرسال رسالة الغياب بنجاح`);
+
+          // حفظ سجل الرسالة
+          try {
+            const messageRecord = new Message({
+              sender: null,
+              recipients: [{
+                student: student._id,
+                parentPhone: formattedPhone
+              }],
+              class: liveClass.class?._id,
+              content: smsMessage,
               messageType: 'individual',
               status: 'sent'
             });
-          } catch (smsErr) {
-            console.error(`Failed to send SMS to ${student.parentPhone}:`, smsErr);
+            await messageRecord.save({ validateBeforeSave: false });
+          } catch (saveError) {
+            console.error('⚠️ خطأ في حفظ سجل الرسالة:', saveError);
           }
+        } else {
+          smsResult.error = smsResponse.error;
+          console.error('❌ فشل إرسال رسالة الغياب:', smsResponse.error);
         }
-
-        if (student.parentEmail) {
-          const emailContent = `
-            <div dir="rtl">
-              <h2>تنبيه غياب</h2>
-              <p>الطالب: ${student.name}</p>
-              <p>الحصة: ${liveClass.class.name}</p>
-              <p>التاريخ: ${new Date(liveClass.date).toLocaleDateString('ar-EG')}</p>
-              <p>الوقت: ${liveClass.startTime}</p>
-              <p>نرجو التواصل مع الإدارة لمعرفة سبب الغياب</p>
-            </div>
-          `;
-
-          try {
-            await transporter.sendMail({
-              from: process.env.EMAIL_USER,
-              to: student.parentEmail,
-              subject: `غياب الطالب ${student.name}`,
-              html: emailContent
-            });
-          } catch (emailErr) {
-            console.error(`Failed to send email to ${student.parentEmail}:`, emailErr);
-          }
-        }
+      } catch (smsError) {
+        smsResult.error = smsError.message;
+        console.error('❌ خطأ في إرسال SMS:', smsError);
       }
-    } catch (err) {
-      console.error('Error sending absence notifications:', err);
     }
+
+    // إرسال إشعار إذا كان عبر RFID وتم الحضور
+    if (method === 'rfid' && (status === 'present' || status === 'late') && student.parentPhone) {
+      try {
+        const smsContent = `تم تسجيل ${status === 'present' ? 'حضور' : 'تأخير'} الطالب ${student.name} في حصة ${liveClass.class?.name || 'غير محدد'} في ${new Date().toLocaleString('ar-EG')}`;
+        await smsGateway.sendIndividualSMS(student.parentPhone, smsContent);
+        
+        // حفظ سجل الرسالة
+        const message = new Message({
+          sender: null,
+          recipients: [{
+            student: student._id,
+            parentPhone: student.parentPhone
+          }],
+          class: liveClass.class?._id,
+          content: smsContent,
+          messageType: 'individual',
+          status: 'sent'
+        });
+        await message.save({ validateBeforeSave: false });
+      } catch (smsErr) {
+        console.error('فشل إرسال SMS:', smsErr);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `تم تسجيل ${status === 'present' ? 'الحضور' : status === 'absent' ? 'الغياب' : 'التأخير'} بنجاح${smsResult.sent ? ' وإرسال رسالة لأولياء الأمور' : ''}`,
+      attendance: attendanceRecord,
+      sms: smsResult,
+      student: {
+        _id: student._id,
+        name: student.name,
+        studentId: student.studentId,
+        parentPhone: student.parentPhone
+      },
+      liveClass: {
+        _id: liveClass._id,
+        date: liveClass.date,
+        startTime: liveClass.startTime,
+        class: liveClass.class?.name
+      }
+    });
+
+  } catch (err) {
+    console.error('❌ خطأ في تسجيل الحضور:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
   }
+});
+// نقطة نهاية للحصول على حضور حصة حية محددة
+app.get('/api/live-classes/:id/attendance', async (req, res) => {
+  try {
+    const liveClassId = req.params.id;
+    
+    if (!mongoose.Types.ObjectId.isValid(liveClassId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'معرف الحصة غير صالح'
+      });
+    }
+
+    const liveClass = await LiveClass.findById(liveClassId)
+      .populate('class', 'name subject')
+      .populate('teacher', 'name')
+      .populate('classroom', 'name')
+      .populate('attendance.student', 'name studentId parentPhone academicYear');
+
+    if (!liveClass) {
+      return res.status(404).json({
+        success: false,
+        error: 'الحصة الحية غير موجودة'
+      });
+    }
+
+    res.json({
+      success: true,
+      liveClass: {
+        _id: liveClass._id,
+        date: liveClass.date,
+        startTime: liveClass.startTime,
+        endTime: liveClass.endTime,
+        status: liveClass.status,
+        class: liveClass.class,
+        teacher: liveClass.teacher,
+        classroom: liveClass.classroom,
+        notes: liveClass.notes
+      },
+      attendance: liveClass.attendance || [],
+      summary: {
+        total: liveClass.attendance?.length || 0,
+        present: liveClass.attendance?.filter(a => a.status === 'present').length || 0,
+        absent: liveClass.attendance?.filter(a => a.status === 'absent').length || 0,
+        late: liveClass.attendance?.filter(a => a.status === 'late').length || 0
+      }
+    });
+
+  } catch (err) {
+    console.error('Error fetching live class attendance:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
 
   // Enhanced attendance endpoint
-  app.post('/api/live-classes/:id/attendance',  async (req, res) => {
-    try {
-      const { studentId, status, method } = req.body; // Added method parameter
-      
-      const liveClass = await LiveClass.findById(req.params.id)
-        .populate('class')
-        .populate('teacher');
-        
-      if (!liveClass) return res.status(404).json({ error: 'الحصة غير موجودة' });
-      
-      // Get student (either by ID or card UID)
-      let student;
-      if (method === 'rfid') {
-        const card = await Card.findOne({ uid: studentId }).populate('student');
-        if (!card) return res.status(404).json({ error: 'البطاقة غير مسجلة' });
-        student = card.student;
-      } else {
-        student = await Student.findById(studentId);
-        if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
-      }
+// نقطة نهاية لتحديث حضور حصة حية
+app.put('/api/live-classes/:id/attendance', async (req, res) => {
+  try {
+    const liveClassId = req.params.id;
+    const { attendance } = req.body; // مصفوفة من سجلات الحضور
 
-      // Check if student is enrolled in this class
-      const isEnrolled = liveClass.class.students.some(s => s.equals(student._id));
-      if (!isEnrolled) {
-        return res.status(400).json({ error: 'الطالب غير مسجل في هذه الحصة' });
-      }
-
-      // Update attendance
-      const existingIndex = liveClass.attendance.findIndex(a => 
-        a.student.equals(student._id)
-      );
-      
-      const attendanceRecord = {
-        student: student._id,
-        status,
-        method: method || 'manual', // Track how attendance was recorded
-        timestamp: new Date()
-      };
-
-      if (existingIndex >= 0) {
-        liveClass.attendance[existingIndex] = attendanceRecord;
-      } else {
-        liveClass.attendance.push(attendanceRecord);
-      }
-
-      await liveClass.save();
-
-      // Send notification if via RFID
-      if (method === 'rfid' && student.parentPhone) {
-        const smsContent = `تم تسجيل حضور الطالب ${student.name} في حصة ${liveClass.class.name} في ${new Date().toLocaleString('ar-EG')}`;
-        try {
-          await smsGateway.send(student.parentPhone, smsContent);
-        } catch (smsErr) {
-          console.error('Failed to send SMS:', smsErr);
-        }
-      }
-
-      res.json({
-        message: 'تم تسجيل الحضور بنجاح',
-        attendance: attendanceRecord,
-        student
+    if (!mongoose.Types.ObjectId.isValid(liveClassId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'معرف الحصة غير صالح'
       });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
     }
-  });
+
+    const liveClass = await LiveClass.findById(liveClassId);
+    if (!liveClass) {
+      return res.status(404).json({
+        success: false,
+        error: 'الحصة الحية غير موجودة'
+      });
+    }
+
+    // تحديث جميع سجلات الحضور
+    if (attendance && Array.isArray(attendance)) {
+      liveClass.attendance = attendance.map(att => ({
+        student: att.student,
+        status: att.status || 'absent',
+        joinedAt: att.joinedAt,
+        leftAt: att.leftAt,
+        timestamp: att.timestamp || new Date()
+      }));
+    }
+
+    await liveClass.save();
+
+    res.json({
+      success: true,
+      message: 'تم تحديث الحضور بنجاح',
+      attendance: liveClass.attendance
+    });
+
+  } catch (err) {
+    console.error('Error updating attendance:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
   app.get('/api/live-classes/:classId/report',  async (req, res) => {
     try {
       const { fromDate, toDate } = req.query;
@@ -5954,6 +6171,741 @@ app.get('/api/payments/student/:studentId',  async (req, res) => {
         lateAmount: 0
       }
     });
+  }
+});
+app.post('/api/live-classes/:id/mark-absent', async (req, res) => {
+  try {
+    const liveClassId = req.params.id;
+    const { studentId, sendSMS = true, customMessage } = req.body;
+
+    console.log(`📝 تسجيل غياب للحصة ${liveClassId} للطالب ${studentId}`);
+
+    // التحقق من صحة الـ ID
+    if (!mongoose.Types.ObjectId.isValid(liveClassId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'معرف الحصة غير صالح'
+      });
+    }
+
+    // البحث عن الحصة الحية
+    const liveClass = await LiveClass.findById(liveClassId)
+      .populate('class', 'name subject')
+      .populate('teacher', 'name');
+
+    if (!liveClass) {
+      return res.status(404).json({
+        success: false,
+        error: 'الحصة الحية غير موجودة'
+      });
+    }
+
+    // العثور على الطالب
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        error: 'الطالب غير موجود'
+      });
+    }
+
+    // التحقق من تسجيل الطالب في الحصة
+    const classObj = await Class.findById(liveClass.class?._id);
+    if (classObj) {
+      const isEnrolled = classObj.students.some((s) =>
+        s.toString() === student._id.toString()
+      );
+      
+      if (!isEnrolled) {
+        return res.status(400).json({
+          success: false,
+          error: 'الطالب غير مسجل في هذه الحصة'
+        });
+      }
+    }
+
+    // إنشاء أو تحديث سجل الحضور
+    const existingIndex = liveClass.attendance.findIndex((a) =>
+      a.student.toString() === student._id.toString()
+    );
+
+    const attendanceRecord = {
+      student: student._id,
+      status: 'absent',
+      method: 'manual',
+      timestamp: new Date(),
+      markedAsAbsent: true,
+      markedAt: new Date()
+    };
+
+    if (existingIndex >= 0) {
+      liveClass.attendance[existingIndex] = attendanceRecord;
+    } else {
+      liveClass.attendance.push(attendanceRecord);
+    }
+
+    await liveClass.save();
+
+    const results = {
+      attendance: attendanceRecord,
+      smsSent: false,
+      smsError: null,
+      student: {
+        _id: student._id,
+        name: student.name,
+        studentId: student.studentId,
+        parentPhone: student.parentPhone
+      },
+      liveClass: {
+        _id: liveClass._id,
+        date: liveClass.date,
+        startTime: liveClass.startTime,
+        className: liveClass.class?.name
+      }
+    };
+
+    // إرسال رسالة SMS للغياب
+    if (sendSMS && student.parentPhone) {
+      try {
+        const cleanPhone = student.parentPhone.trim();
+        let formattedPhone = cleanPhone;
+        
+        // تنسيق رقم الهاتف
+        if (!formattedPhone.startsWith('+')) {
+          if (formattedPhone.startsWith('0')) {
+            formattedPhone = '+213' + formattedPhone.substring(1);
+          } else {
+            formattedPhone = '+213' + formattedPhone;
+          }
+        }
+
+        // إنشاء نص الرسالة
+        const smsMessage =  
+        `غياب الطالب ${student.name}\n` +
+        `الحصة: ${liveClass.class?.name || 'المدرسة'}\n` +
+        `التاريخ: ${new Date(liveClass.date).toLocaleDateString('ar-EG')}\n` +
+        `الرجاء التواصل مع الإدارة`;
+  
+
+        console.log(`📱 إرسال رسالة غياب إلى: ${formattedPhone}`);
+
+        // إرسال الرسالة باستخدام Infobip
+        const smsResult = await smsGateway.sendIndividualSMS(formattedPhone, smsMessage);
+
+        if (smsResult.success) {
+          results.smsSent = true;
+          console.log(`✅ تم إرسال رسالة الغياب بنجاح`);
+
+          // حفظ سجل الرسالة
+          try {
+            const messageRecord = new Message({
+              sender: null,
+              recipients: [{
+                student: student._id,
+                parentPhone: formattedPhone
+              }],
+              class: liveClass.class?._id,
+              content: smsMessage,
+              messageType: 'individual',
+              status: 'sent'
+            });
+            await messageRecord.save({ validateBeforeSave: false });
+          } catch (saveError) {
+            console.error('⚠️ خطأ في حفظ سجل الرسالة:', saveError);
+          }
+        } else {
+          results.smsSent = false;
+          results.smsError = smsResult.error;
+          console.error('❌ فشل إرسال رسالة الغياب:', smsResult.error);
+        }
+      } catch (smsError) {
+        results.smsSent = false;
+        results.smsError = smsError.message;
+        console.error('❌ خطأ في إرسال SMS:', smsError);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'تم تسجيل غياب الطالب بنجاح' + (results.smsSent ? ' وإرسال رسالة لأولياء الأمور' : ''),
+      data: results
+    });
+
+  } catch (err) {
+    console.error('❌ خطأ في تسجيل الغياب:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message,
+      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  }
+});
+app.post('/api/live-classes/:id/bulk-mark-absent', async (req, res) => {
+  try {
+    const liveClassId = req.params.id;
+    const { studentIds, sendSMS = true, customMessage } = req.body;
+
+    console.log(`📝 تسجيل غياب جماعي للحصة ${liveClassId} لـ ${studentIds?.length || 0} طالب`);
+
+    if (!mongoose.Types.ObjectId.isValid(liveClassId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'معرف الحصة غير صالح'
+      });
+    }
+
+    if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'يجب توفير مصفوفة من معرفات الطلاب'
+      });
+    }
+
+    const liveClass = await LiveClass.findById(liveClassId)
+      .populate('class', 'name subject')
+      .populate('teacher', 'name');
+
+    if (!liveClass) {
+      return res.status(404).json({
+        success: false,
+        error: 'الحصة الحية غير موجودة'
+      });
+    }
+
+    const results = {
+      total: studentIds.length,
+      success: 0,
+      failed: 0,
+      details: []
+    };
+
+    // معالجة كل طالب
+    for (const studentId of studentIds) {
+      try {
+        const student = await Student.findById(studentId);
+        if (!student) {
+          results.details.push({
+            studentId,
+            success: false,
+            error: 'الطالب غير موجود'
+          });
+          results.failed++;
+          continue;
+        }
+
+        // تحديث الحضور
+        const existingIndex = liveClass.attendance.findIndex((a) =>
+          a.student.toString() === student._id.toString()
+        );
+
+        const attendanceRecord = {
+          student: student._id,
+          status: 'absent',
+          method: 'bulk',
+          timestamp: new Date(),
+          markedAsAbsent: true,
+          markedAt: new Date()
+        };
+
+        if (existingIndex >= 0) {
+          liveClass.attendance[existingIndex] = attendanceRecord;
+        } else {
+          liveClass.attendance.push(attendanceRecord);
+        }
+
+        let smsSent = false;
+        let smsError = null;
+
+        // إرسال SMS
+        if (sendSMS && student.parentPhone) {
+          try {
+            const cleanPhone = student.parentPhone.trim();
+            let formattedPhone = cleanPhone;
+            
+            if (!formattedPhone.startsWith('+')) {
+              if (formattedPhone.startsWith('0')) {
+                formattedPhone = '+213' + formattedPhone.substring(1);
+              } else {
+                formattedPhone = '+213' + formattedPhone;
+              }
+            }
+
+            const smsMessage = customMessage || 
+              `📚 إشعار غياب\n` +
+              `عزيزي ولي أمر الطالب ${student.name}\n` +
+              `يؤسفنا إعلامكم بأن الطالب غائب عن حصة ${liveClass.class?.name || 'المدرسة'}\n` +
+              `📅 التاريخ: ${new Date(liveClass.date).toLocaleDateString('ar-EG')}\n` +
+              `⏰ الوقت: ${liveClass.startTime}\n` +
+              `👨‍🏫 المعلم: ${liveClass.teacher?.name || 'غير محدد'}\n` +
+              `📞 نرجو التواصل مع الإدارة`;
+
+            const smsResult = await smsGateway.sendIndividualSMS(formattedPhone, smsMessage);
+            
+            if (smsResult.success) {
+              smsSent = true;
+              
+              // حفظ سجل الرسالة
+              try {
+                const messageRecord = new Message({
+                  sender: null,
+                  recipients: [{
+                    student: student._id,
+                    parentPhone: formattedPhone
+                  }],
+                  class: liveClass.class?._id,
+                  content: smsMessage,
+                  messageType: 'individual',
+                  status: 'sent'
+                });
+                await messageRecord.save({ validateBeforeSave: false });
+              } catch (saveError) {
+                console.error('خطأ في حفظ سجل الرسالة:', saveError);
+              }
+            } else {
+              smsError = smsResult.error;
+            }
+          } catch (smsError) {
+            smsError = smsError.message;
+          }
+        }
+
+        results.details.push({
+          studentId,
+          studentName: student.name,
+          success: true,
+          smsSent,
+          smsError,
+          parentPhone: student.parentPhone
+        });
+        results.success++;
+
+      } catch (error) {
+        results.details.push({
+          studentId,
+          success: false,
+          error: error.message
+        });
+        results.failed++;
+      }
+    }
+
+    // حفظ تحديثات الحضور
+    await liveClass.save();
+
+    res.json({
+      success: true,
+      message: `تم معالجة ${results.total} طالب - ${results.success} ناجح، ${results.failed} فاشل`,
+      data: results
+    });
+
+  } catch (err) {
+    console.error('❌ خطأ في تسجيل الغياب الجماعي:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+app.post('/api/live-classes/:id/auto-absent-all', async (req, res) => {
+  try {
+    const liveClassId = req.params.id;
+    const { sendSMS = true, customMessage } = req.body;
+
+    console.log(`🤖 تسجيل غياب تلقائي للحصة ${liveClassId}`);
+
+    if (!mongoose.Types.ObjectId.isValid(liveClassId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'معرف الحصة غير صالح'
+      });
+    }
+
+    const liveClass = await LiveClass.findById(liveClassId)
+      .populate('class', 'name subject')
+      .populate('teacher', 'name');
+
+    if (!liveClass) {
+      return res.status(404).json({
+        success: false,
+        error: 'الحصة الحية غير موجودة'
+      });
+    }
+
+    // الحصول على جميع طلاب الحصة
+    const classObj = await Class.findById(liveClass.class?._id)
+      .populate('students');
+
+    if (!classObj || !classObj.students || classObj.students.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'لا توجد طلاب مسجلين في هذه الحصة'
+      });
+    }
+
+    const results = {
+      totalStudents: classObj.students.length,
+      markedAbsent: 0,
+      smsSent: 0,
+      smsFailed: 0,
+      details: []
+    };
+
+    // تحديد الطلاب الحاضرين
+    const presentStudentIds = new Set();
+    liveClass.attendance.forEach(att => {
+      if (att.status === 'present' || att.status === 'late') {
+        presentStudentIds.add(att.student.toString());
+      }
+    });
+
+    // تسجيل غياب جميع الطلاب غير الحاضرين
+    for (const student of classObj.students) {
+      const isPresent = presentStudentIds.has(student._id.toString());
+      
+      if (!isPresent) {
+        try {
+          // تحديث الحضور
+          const existingIndex = liveClass.attendance.findIndex((a) =>
+            a.student.toString() === student._id.toString()
+          );
+
+          const attendanceRecord = {
+            student: student._id,
+            status: 'absent',
+            method: 'auto',
+            timestamp: new Date(),
+            markedAsAbsent: true,
+            markedAt: new Date(),
+            autoMarked: true
+          };
+
+          if (existingIndex >= 0) {
+            liveClass.attendance[existingIndex] = attendanceRecord;
+          } else {
+            liveClass.attendance.push(attendanceRecord);
+          }
+
+          let smsSent = false;
+          let smsError = null;
+
+          // إرسال SMS
+          if (sendSMS && student.parentPhone) {
+            try {
+              const cleanPhone = student.parentPhone.trim();
+              let formattedPhone = cleanPhone;
+              
+              if (!formattedPhone.startsWith('+')) {
+                if (formattedPhone.startsWith('0')) {
+                  formattedPhone = '+213' + formattedPhone.substring(1);
+                } else {
+                  formattedPhone = '+213' + formattedPhone;
+                }
+              }
+
+              const smsMessage = customMessage || 
+                `📚 إشعار غياب\n` +
+                `عزيزي ولي أمر الطالب ${student.name}\n` +
+                `يؤسفنا إعلامكم بأن الطالب غائب عن حصة ${liveClass.class?.name || 'المدرسة'}\n` +
+                `📅 التاريخ: ${new Date(liveClass.date).toLocaleDateString('ar-EG')}\n` +
+                `⏰ الوقت: ${liveClass.startTime}\n` +
+                `👨‍🏫 المعلم: ${liveClass.teacher?.name || 'غير محدد'}\n` +
+                `📞 نرجو التواصل مع الإدارة`;
+
+              const smsResult = await smsGateway.sendIndividualSMS(formattedPhone, smsMessage);
+              
+              if (smsResult.success) {
+                smsSent = true;
+                results.smsSent++;
+                
+                // حفظ سجل الرسالة
+                try {
+                  const messageRecord = new Message({
+                    sender: null,
+                    recipients: [{
+                      student: student._id,
+                      parentPhone: formattedPhone
+                    }],
+                    class: liveClass.class?._id,
+                    content: smsMessage,
+                    messageType: 'individual',
+                    status: 'sent'
+                  });
+                  await messageRecord.save({ validateBeforeSave: false });
+                } catch (saveError) {
+                  console.error('خطأ في حفظ سجل الرسالة:', saveError);
+                }
+              } else {
+                smsError = smsResult.error;
+                results.smsFailed++;
+              }
+            } catch (smsError) {
+              smsError = smsError.message;
+              results.smsFailed++;
+            }
+          }
+
+          results.details.push({
+            studentId: student._id,
+            studentName: student.name,
+            markedAbsent: true,
+            smsSent,
+            smsError,
+            parentPhone: student.parentPhone
+          });
+          results.markedAbsent++;
+
+        } catch (error) {
+          results.details.push({
+            studentId: student._id,
+            studentName: student.name,
+            markedAbsent: false,
+            error: error.message
+          });
+        }
+      }
+    }
+
+    // حفظ تحديثات الحضور
+    await liveClass.save();
+
+    res.json({
+      success: true,
+      message: `تم تسجيل ${results.markedAbsent} طالب كغائبين - ${results.smsSent} رسالة مرسلة`,
+      data: results,
+      summary: {
+        totalStudents: results.totalStudents,
+        present: classObj.students.length - results.markedAbsent,
+        absent: results.markedAbsent,
+        smsSuccess: results.smsSent,
+        smsFailed: results.smsFailed
+      }
+    });
+
+  } catch (err) {
+    console.error('❌ خطأ في تسجيل الغياب التلقائي:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+// نقطة نهاية لاختبار SMS مباشرة
+app.post('/api/test-sms-direct', async (req, res) => {
+  try {
+    const { phone, message } = req.body;
+    
+    console.log('🔬 === اختبار مباشر لـ SMS ===');
+    console.log('📱 الرقم:', phone);
+    console.log('📝 الرسالة:', message);
+    
+    if (!phone) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'يجب توفير رقم الهاتف' 
+      });
+    }
+    
+    // استخدام رسالة افتراضية
+    const testMessage = message || '🔬 هذه رسالة اختبار مباشر من نظام Redox. يرجى التأكيد باستلامها.';
+    
+    console.log('📤 إرسال الطلب إلى smsGateway...');
+    const result = await smsGateway.sendIndividualSMS(phone, testMessage);
+    
+    console.log('📥 نتيجة sendIndividualSMS:', JSON.stringify(result, null, 2));
+    
+    if (result.success) {
+      // تسجيل في قاعدة البيانات
+      try {
+        const testRecord = new Message({
+          sender: req.user?.id || null,
+          recipients: [{
+            parentPhone: phone
+          }],
+          content: testMessage,
+          messageType: 'test',
+          status: 'sent'
+        });
+        
+        await testRecord.save();
+        console.log('✅ سجل الاختبار حفظ في قاعدة البيانات:', testRecord._id);
+        
+      } catch (dbError) {
+        console.error('⚠️ خطأ في حفظ سجل الاختبار:', dbError.message);
+      }
+      
+      res.json({
+        success: true,
+        message: '✅ تم إرسال SMS بنجاح في الاختبار المباشر',
+        messageId: result.messageId,
+        to: result.to,
+        status: result.status,
+        debug: {
+          requestTime: new Date().toISOString(),
+          gatewayResult: result
+        }
+      });
+      
+    } else {
+      console.error('❌ فشل الاختبار المباشر:', result.error);
+      
+      res.status(500).json({
+        success: false,
+        error: '❌ فشل إرسال SMS في الاختبار المباشر',
+        details: result.error,
+        gatewayError: result.details,
+        debug: {
+          requestTime: new Date().toISOString(),
+          gatewayResult: result
+        }
+      });
+    }
+    
+  } catch (err) {
+    console.error('💥 خطأ غير متوقع في اختبار SMS:', err);
+    res.status(500).json({
+      success: false,
+      error: 'خطأ غير متوقع',
+      message: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  }
+});
+
+// نقطة نهاية لفحص حالة API Key
+app.get('/api/sms/check-api-key', async (req, res) => {
+  try {
+    console.log('🔑 التحقق من صحة API Key...');
+    
+    const testPayload = {
+      messages: [{
+        from: 'Redox',
+        destinations: [{ to: '+213559581957' }], // رقم اختبار
+        text: '🔑 اختبار API Key'
+      }]
+    };
+    
+    const testResponse = await axios.post(
+      'https://3dvjnm.api.infobip.com/sms/2/text/advanced',
+      testPayload,
+      {
+        headers: {
+          'Authorization': 'App 54d821dd2a75bacd6e4bdbe5a020579a-19a2298b-a8f8-44bb-a624-53268d4aa47e',
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    res.json({
+      success: true,
+      message: '✅ API Key صالح',
+      response: testResponse.data
+    });
+    
+  } catch (error) {
+    console.error('❌ خطأ في API Key:', error.response?.data || error.message);
+    
+    res.status(500).json({
+      success: false,
+      error: '❌ مشكلة في API Key',
+      details: error.response?.data || error.message,
+      status: error.response?.status
+    });
+  }
+});
+app.post('/api/messages',  async (req, res) => {
+  try {
+    const { recipients, content, messageType, class: classId } = req.body;
+
+    // Validate recipients based on message type
+    let validatedRecipients = [];
+
+    if (messageType === 'individual' && recipients.student) {
+      const student = await Student.findById(recipients.student);
+      if (!student) {
+        return res.status(400).json({ error: 'الطالب غير موجود' });
+      }
+      validatedRecipients.push({
+        student: student._id,
+        parentPhone: student.parentPhone,
+        parentEmail: student.parentEmail
+      });
+    }
+    else if (messageType === 'class' && classId) {
+      const classObj = await Class.findById(classId).populate('students');
+      if (!classObj) {
+        return res.status(400).json({ error: 'الحصة غير موجودة' });
+      }
+      validatedRecipients = classObj.students.map(student => ({
+        student: student._id,
+        parentPhone: student.parentPhone,
+        parentEmail: student.parentEmail
+      }));
+    }
+    else if (messageType === 'group' && recipients.length) {
+      for (const recipient of recipients) {
+        const student = await Student.findById(recipient.student);
+        if (student) {
+          validatedRecipients.push({
+            student: student._id,
+            parentPhone: student.parentPhone,
+            parentEmail: student.parentEmail
+          });
+        }
+      }
+    }
+
+    if (!validatedRecipients.length) {
+      return res.status(400).json({ error: 'لا يوجد مستلمين للرسالة' });
+    }
+
+    // Send messages
+    const failedRecipients = [];
+
+    for (const recipient of validatedRecipients) {
+      try {
+        if (recipient.parentPhone) {
+          await smsGateway.send(recipient.parentPhone, content);
+        }
+        if (recipient.parentEmail) {
+          await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: recipient.parentEmail,
+            subject: 'رسالة من المدرسة',
+            text: content
+          });
+        }
+      } catch (err) {
+        console.error(`فشل إرسال الرسالة لـ ${recipient.parentPhone || recipient.parentEmail}`, err);
+        failedRecipients.push(recipient);
+      }
+    }
+
+    // Save message record
+    const message = new Message({
+      sender: req.user.id,
+      recipients: validatedRecipients,
+      class: classId,
+      content,
+      messageType,
+      status: failedRecipients.length ? 'failed' : 'sent'
+    });
+    await message.save();
+
+    if (failedRecipients.length) {
+      return res.status(207).json({
+        message: 'تم إرسال بعض الرسائل وفشل البعض الآخر',
+        failedRecipients,
+        messageId: message._id
+      });
+    }
+
+    res.status(201).json({
+      message: 'تم إرسال جميع الرسائل بنجاح',
+      messageId: message._id
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -6426,6 +7378,485 @@ app.get('/api/payments/student/:studentId',  async (req, res) => {
       res.status(500).json({ error: err.message });
     }
   });
+
+  // في server.js، أضف هذا الكود مع نقاط النهاية الأخرى
+
+// 1. نقطة نهاية لمعالجة الغياب بعد الحصة وإرسال رسائل تلقائية
+app.post('/api/live-classes/:id/process-absences',  async (req, res) => {
+  try {
+    const liveClassId = req.params.id;
+    const { sendSMS = true, customMessage } = req.body;
+
+    console.log(`=== معالجة غيابات الحصة ${liveClassId} ===`);
+
+    // الحصول على الحصة الحية
+    const liveClass = await LiveClass.findById(liveClassId)
+      .populate('class')
+      .populate('attendance.student');
+
+    if (!liveClass) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الحصة غير موجودة' 
+      });
+    }
+
+    if (liveClass.status !== 'completed') {
+      return res.status(400).json({ 
+        success: false,
+        error: 'الحصة لم تنته بعد، يجب أن تكون الحصة مكتملة' 
+      });
+    }
+
+    // جلب جميع طلاب الحصة الأصلية
+    const classObj = await Class.findById(liveClass.class._id)
+      .populate('students', 'name studentId parentPhone parentEmail academicYear');
+
+    if (!classObj) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الحصة الأصلية غير موجودة' 
+      });
+    }
+
+    const allStudents = classObj.students;
+    const presentStudents = liveClass.attendance
+      .filter(att => att.status === 'present' || att.status === 'late')
+      .map(att => att.student._id.toString());
+
+    // تحديد الطلاب الغائبين
+    const absentStudents = allStudents.filter(student => 
+      !presentStudents.includes(student._id.toString())
+    );
+
+    console.log(`📊 الإحصائيات:
+    - إجمالي الطلاب: ${allStudents.length}
+    - الحاضرون: ${presentStudents.length}
+    - الغائبون: ${absentStudents.length}`);
+
+    // إعداد الرسائل
+    const results = {
+      totalStudents: allStudents.length,
+      presentCount: presentStudents.length,
+      absentCount: absentStudents.length,
+      absentStudents: [],
+      messagesSent: 0,
+      failedMessages: []
+    };
+
+    // إرسال رسائل للغائبين إذا كان الخيار مفعلاً
+    if (sendSMS && absentStudents.length > 0) {
+      console.log(`📱 إرسال رسائل للطلاب الغائبين...`);
+
+      for (const student of absentStudents) {
+        try {
+          if (student.parentPhone) {
+            // نص الرسالة الافتراضي أو المخصص
+            const message = customMessage || 
+              `عزيزي ولي أمر الطالب ${student.name}، نود إعلامكم أن الطالب غائب عن حصة ${liveClass.class.name} بتاريخ ${new Date(liveClass.date).toLocaleDateString('ar-EG')}. نرجو التواصل مع الإدارة لمعرفة السبب.`;
+
+            // إرسال الرسالة
+            const smsResult = await smsGateway.sendIndividualSMS(
+              student.parentPhone,
+              message
+            );
+
+            // حفظ سجل الرسالة في قاعدة البيانات
+            const messageRecord = new Message({
+              sender: req.user.id,
+              recipients: [{
+                student: student._id,
+                parentPhone: student.parentPhone,
+                parentEmail: student.parentEmail
+              }],
+              class: liveClass.class._id,
+              content: message,
+              messageType: 'individual',
+              status: smsResult.success ? 'sent' : 'failed'
+            });
+            await messageRecord.save();
+
+            results.absentStudents.push({
+              studentId: student._id,
+              name: student.name,
+              parentPhone: student.parentPhone,
+              messageSent: smsResult.success,
+              message: smsResult.success ? 'تم الإرسال' : 'فشل الإرسال'
+            });
+
+            if (smsResult.success) {
+              results.messagesSent++;
+            } else {
+              results.failedMessages.push({
+                student: student.name,
+                phone: student.parentPhone,
+                error: smsResult.error
+              });
+            }
+
+            // تأخير بسيط لتجنب تجاوز حدود API
+            await new Promise(resolve => setTimeout(resolve, 100));
+          } else {
+            results.absentStudents.push({
+              studentId: student._id,
+              name: student.name,
+              parentPhone: null,
+              messageSent: false,
+              message: 'لا يوجد رقم هاتف'
+            });
+          }
+        } catch (error) {
+          console.error(`❌ خطأ في إرسال رسالة للطالب ${student.name}:`, error);
+          results.failedMessages.push({
+            student: student.name,
+            phone: student.parentPhone,
+            error: error.message
+          });
+        }
+      }
+    }
+
+    // تحديث سجلات الغياب في الحصة الحية
+    for (const student of absentStudents) {
+      // التحقق مما إذا كان الطالب لديه سجل حضور بالفعل
+      const existingAttendance = liveClass.attendance.find(
+        att => att.student._id.toString() === student._id.toString()
+      );
+
+      if (!existingAttendance) {
+        // إضافة سجل غياب
+        liveClass.attendance.push({
+          student: student._id,
+          status: 'absent',
+          joinedAt: null,
+          leftAt: null
+        });
+      }
+    }
+
+    await liveClass.save();
+
+    res.json({
+      success: true,
+      message: `تم معالجة ${absentStudents.length} طالب غائب${sendSMS ? ` وإرسال ${results.messagesSent} رسالة` : ''}`,
+      data: results,
+      classInfo: {
+        name: liveClass.class.name,
+        date: liveClass.date,
+        time: liveClass.startTime
+      }
+    });
+
+  } catch (err) {
+    console.error('❌ خطأ في معالجة الغيابات:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 2. نقطة نهاية لإرسال رسائل جماعية لحصة معينة
+app.post('/api/live-classes/:id/send-bulk-messages',  async (req, res) => {
+  try {
+    const liveClassId = req.params.id;
+    const { message, recipientType = 'all', customRecipients = [] } = req.body;
+
+    console.log(`📨 إرسال رسائل جماعية للحصة ${liveClassId}`);
+
+    if (!message || message.trim().length < 5) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'يجب إدخال نص الرسالة (5 أحرف على الأقل)' 
+      });
+    }
+
+    const liveClass = await LiveClass.findById(liveClassId)
+      .populate('class')
+      .populate('attendance.student');
+
+    if (!liveClass) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الحصة غير موجودة' 
+      });
+    }
+
+    // جلب جميع طلاب الحصة
+    const classObj = await Class.findById(liveClass.class._id)
+      .populate('students', 'name studentId parentPhone parentEmail');
+
+    if (!classObj) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الحصة الأصلية غير موجودة' 
+      });
+    }
+
+    let recipients = [];
+
+    switch (recipientType) {
+      case 'all':
+        // جميع الطلاب
+        recipients = classObj.students;
+        break;
+      case 'present':
+        // الطلاب الحاضرين فقط
+        const presentStudentIds = liveClass.attendance
+          .filter(att => att.status === 'present' || att.status === 'late')
+          .map(att => att.student._id.toString());
+        recipients = classObj.students.filter(student => 
+          presentStudentIds.includes(student._id.toString())
+        );
+        break;
+      case 'absent':
+        // الطلاب الغائبين فقط
+        const absentStudentIds = classObj.students
+          .filter(student => 
+            !liveClass.attendance.some(att => 
+              att.student._id.toString() === student._id.toString() && 
+              (att.status === 'present' || att.status === 'late')
+            )
+          )
+          .map(student => student._id.toString());
+        recipients = classObj.students.filter(student => 
+          absentStudentIds.includes(student._id.toString())
+        );
+        break;
+      case 'custom':
+        // قائمة مخصصة من الأرقام
+        recipients = customRecipients.map(phone => ({ parentPhone: phone }));
+        break;
+    }
+
+    // تصفية الطلاب الذين لديهم أرقام هواتف
+    const studentsWithPhones = recipients.filter(s => s.parentPhone);
+    const phoneNumbers = studentsWithPhones.map(s => s.parentPhone);
+
+    console.log(`👥 عدد المستلمين: ${phoneNumbers.length}`);
+
+    if (phoneNumbers.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'لا يوجد مستلمين بأرقام هواتف صالحة' 
+      });
+    }
+
+    // إرسال الرسائل
+    const smsResult = await smsGateway.sendBulkSMS(phoneNumbers, message);
+
+    // حفظ سجل الرسالة
+    const messageRecord = new Message({
+      sender: req.user.id,
+      recipients: studentsWithPhones.map(student => ({
+        student: student._id || null,
+        parentPhone: student.parentPhone,
+        parentEmail: student.parentEmail
+      })),
+      class: liveClass.class._id,
+      content: message,
+      messageType: 'class',
+      status: smsResult.success ? 'sent' : 'failed'
+    });
+    await messageRecord.save();
+
+    res.json({
+      success: true,
+      message: `تم إرسال الرسالة إلى ${phoneNumbers.length} مستلم`,
+      data: {
+        recipientsCount: phoneNumbers.length,
+        message: message,
+        smsResult: smsResult,
+        recipientType: recipientType
+      }
+    });
+
+  } catch (err) {
+    console.error('❌ خطأ في إرسال الرسائل الجماعية:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 3. نقطة نهاية لإرسال تذكير بالدفع للطلاب المتأخرين
+app.post('/api/messages/send-payment-reminders', authenticate(['accountant', 'admin']), async (req, res) => {
+  try {
+    const { classId, month, customMessage } = req.body;
+
+    console.log(`💰 إرسال تذكير بالدفع`);
+
+    // جلب الطلاب المتأخرين في الدفع
+    const pendingPayments = await Payment.find({
+      class: classId,
+      month: month,
+      status: { $in: ['pending', 'late'] }
+    }).populate('student', 'name parentPhone parentEmail');
+
+    if (pendingPayments.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'لا توجد دفعات متأخرة' 
+      });
+    }
+
+    // الحصول على معلومات الحصة
+    const classObj = await Class.findById(classId);
+    
+    const results = {
+      totalReminders: pendingPayments.length,
+      sent: 0,
+      failed: 0,
+      details: []
+    };
+
+    // إرسال رسائل تذكير
+    for (const payment of pendingPayments) {
+      try {
+        if (payment.student?.parentPhone) {
+          const message = customMessage || 
+            `عزيزي ولي أمر الطالب ${payment.student.name}، نود تذكيركم بأن دفعة الحصة ${classObj?.name || ''} لشهر ${month} بقيمة ${payment.amount} د.ج ما زالت معلقة. يرجى التسديد في أقرب وقت.`;
+
+          const smsResult = await smsGateway.sendIndividualSMS(
+            payment.student.parentPhone,
+            message
+          );
+
+          // حفظ سجل الرسالة
+          const messageRecord = new Message({
+            sender: req.user.id,
+            recipients: [{
+              student: payment.student._id,
+              parentPhone: payment.student.parentPhone
+            }],
+            class: classId,
+            content: message,
+            messageType: 'payment',
+            status: smsResult.success ? 'sent' : 'failed'
+          });
+          await messageRecord.save();
+
+          results.details.push({
+            student: payment.student.name,
+            phone: payment.student.parentPhone,
+            amount: payment.amount,
+            month: payment.month,
+            success: smsResult.success
+          });
+
+          if (smsResult.success) {
+            results.sent++;
+          } else {
+            results.failed++;
+          }
+
+          // تأخير بين الرسائل
+          await new Promise(resolve => setTimeout(resolve, 150));
+        }
+      } catch (error) {
+        console.error(`❌ خطأ في إرسال تذكير للطالب ${payment.student?.name}:`, error);
+        results.failed++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `تم إرسال ${results.sent} تذكير بالدفع`,
+      data: results
+    });
+
+  } catch (err) {
+    console.error('❌ خطأ في إرسال تذكير الدفع:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 4. نقطة نهاية للحصول على سجل الرسائل المرسلة
+app.get('/api/messages/history', authenticate(['admin', 'teacher', 'accountant']), async (req, res) => {
+  try {
+    const { startDate, endDate, messageType, classId, limit = 50 } = req.query;
+
+    const query = {};
+
+    if (messageType) query.messageType = messageType;
+    if (classId) query.class = classId;
+    if (startDate || endDate) {
+      query.sentAt = {};
+      if (startDate) query.sentAt.$gte = new Date(startDate);
+      if (endDate) query.sentAt.$lte = new Date(endDate);
+    }
+
+    const messages = await Message.find(query)
+      .populate('sender', 'username fullName')
+      .populate('recipients.student', 'name studentId')
+      .populate('class', 'name')
+      .sort({ sentAt: -1 })
+      .limit(parseInt(limit));
+
+    // تحليل الإحصائيات
+    const stats = {
+      total: messages.length,
+      byType: {},
+      successRate: 0
+    };
+
+    messages.forEach(msg => {
+      stats.byType[msg.messageType] = (stats.byType[msg.messageType] || 0) + 1;
+    });
+
+    const successfulMessages = messages.filter(msg => msg.status === 'sent').length;
+    stats.successRate = messages.length > 0 ? Math.round((successfulMessages / messages.length) * 100) : 0;
+
+    res.json({
+      success: true,
+      messages: messages,
+      stats: stats,
+      totalCount: await Message.countDocuments(query)
+    });
+
+  } catch (err) {
+    console.error('❌ خطأ في جلب سجل الرسائل:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
+
+// 5. نقطة نهاية للتحقق من حالة إرسال الرسالة
+app.get('/api/messages/:id/status', authenticate(['admin', 'teacher', 'accountant']), async (req, res) => {
+  try {
+    const message = await Message.findById(req.params.id)
+      .populate('sender', 'username fullName')
+      .populate('recipients.student', 'name')
+      .populate('class', 'name');
+
+    if (!message) {
+      return res.status(404).json({ 
+        success: false,
+        error: 'الرسالة غير موجودة' 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: message,
+      recipientsCount: message.recipients.length,
+      sentDate: message.sentAt
+    });
+
+  } catch (err) {
+    console.error('❌ خطأ في جلب حالة الرسالة:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
+  }
+});
 
 
   app.get('/student/status/:studentId', async (req, res) => {
@@ -10170,10 +11601,12 @@ app.put('/api/payment-systems/rounds/:id/pay',  async (req, res) => {
 
 
 // Get student classes
-app.get('/api/students/:id/classes',  async (req, res) => {
+// Get student classes - ADD THIS ENDPOINT
+app.get('/api/students/:id/classes', authenticate(['admin', 'teacher', 'secretary']), async (req, res) => {
   try {
     const studentId = req.params.id;
     
+    // Find the student and populate classes
     const student = await Student.findById(studentId)
       .populate({
         path: 'classes',
@@ -10184,12 +11617,22 @@ app.get('/api/students/:id/classes',  async (req, res) => {
       });
 
     if (!student) {
-      return res.status(404).json({ error: 'الطالب غير موجود' });
+      return res.status(404).json({ 
+        success: false,
+        error: 'الطالب غير موجود' 
+      });
     }
 
-    res.json(student.classes || []);
+    res.json({
+      success: true,
+      data: student.classes || []
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Error fetching student classes:', err);
+    res.status(500).json({ 
+      success: false,
+      error: err.message 
+    });
   }
 });
 
@@ -10393,4 +11836,3 @@ app.get('/api/payments/class/:classId', async (req, res) => {
     });
   }
 });
-
